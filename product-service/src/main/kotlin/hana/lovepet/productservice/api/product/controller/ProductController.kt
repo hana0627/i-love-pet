@@ -33,6 +33,12 @@ class ProductController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping(params = ["ids"])
+    fun getProducts(@RequestParam("ids") ids: List<Long>): ResponseEntity<List<ProductInformationResponse>> {
+        val response = productService.getProductsInformation(ids)
+        return ResponseEntity.ok(response)
+    }
+
 //    @GetMapping("/{productId}/stock")
 //    fun getStock(@PathVariable("productId") productId: Long): ResponseEntity<Int> {
 //        val response = productService.getStock(productId)

@@ -129,6 +129,68 @@ class ProductServiceTest {
         assertThat(result).isEqualTo(responses)
     }
 
+    @Test
+    fun `상품id리스트를 통해 여러 상품조회가 가능하다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 26, 9, 0, 0))
+
+        val ids: List<Long> = listOf(1L, 2L, 3L)
+        val product1 = Product.fixture(timeProvider = timeProvider).apply { id = 1L }
+        val product2 = Product.fixture(
+            name = "로얄캐닌 고양이 사료 키튼",
+            price = 38000L,
+            stock = 500,
+            timeProvider = timeProvider
+        ).apply { id = 2L }
+        val product3 = Product.fixture(
+            name = "로얄캐닌 고양이 사료 인도어",
+            price = 37000L,
+            stock = 500,
+            timeProvider = timeProvider
+        ).apply { id = 3L }
+
+        val products: List<Product> = listOf(product1, product2, product3)
+
+
+        given(productRepository.findAllById(ids)).willReturn(products)
+
+        //when
+        val result = productService.getProductsInformation(ids)
+
+        //then
+        assertThat(result.size).isEqualTo(products.size)
+        assertThat(result[0].name).isEqualTo(product1.name)
+        assertThat(result[1].price).isEqualTo(product2.price)
+        assertThat(result[2].stock).isEqualTo(product3.stock)
+
+    }
+
+    @Test
+    fun `상품id리스트로 조회시  없는 상품이 있다면 예외가 발생한다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 26, 9, 0, 0))
+        val ids: List<Long> = listOf(1L, 2L, 3L)
+
+        val product1 = Product.fixture(timeProvider = timeProvider).apply { id = 1L }
+        val product2 = Product.fixture(
+            name = "로얄캐닌 고양이 사료 키튼",
+            price = 38000L,
+            stock = 500,
+            timeProvider = timeProvider
+        ).apply { id = 2L }
+
+        val products: List<Product> = listOf(product1, product2)
+
+        given(productRepository.findAllById(ids)).willReturn(products)
+
+        //when
+        val result = assertThrows<EntityNotFoundException> {productService.getProductsInformation(ids)}
+
+        //then
+        assertThat(result.message).isEqualTo("다음 상품을 찾을 수 없습니다: ${listOf( ids[2])}")
+
+    }
+
 //    @Test
 //    fun `재고조회에 성공한다`() {
 //        //given

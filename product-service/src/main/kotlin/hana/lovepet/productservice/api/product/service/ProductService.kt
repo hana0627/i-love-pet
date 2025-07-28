@@ -8,5 +8,6 @@ interface ProductService {
     fun register(productRegisterRequest: ProductRegisterRequest): ProductRegisterResponse
     fun getProductInformation(productId: Long): ProductInformationResponse
     fun getAllProducts(): List<ProductInformationResponse>
+    fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse>
 //    fun getStock(productId: Long): Int
 }

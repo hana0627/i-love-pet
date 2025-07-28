@@ -50,6 +50,23 @@ class ProductServiceImpl(
         }
     }
 
+    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
+        val entities: List<Product> = productRepository.findAllById(ids)
+        val foundIds = entities.map { it.id }.toSet()
+        val missing = ids.filterNot { it in foundIds }
+        if (missing.isNotEmpty()) {
+            throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
+        }
+
+        return entities.map {
+            ProductInformationResponse(
+                name = it.name,
+                price = it.price,
+                stock = it.stock,
+            )
+        }
+    }
+
 //    override fun getStock(productId: Long): Int {
 //        return getProductOrException(productId).stock
 //    }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.context.MessageSource
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -22,6 +23,9 @@ import org.springframework.test.web.servlet.post
 @WebMvcTest(ProductController::class)
 @Import(RestControllerHandler::class)
 class ProductControllerTest {
+
+    @Autowired
+    private lateinit var messageSource: MessageSource
 
     @Autowired
     lateinit var mvc: MockMvc
@@ -44,7 +48,7 @@ class ProductControllerTest {
 
         mvc.post("/api/products") {
             contentType = MediaType.APPLICATION_JSON
-            content = om.writeValueAsString(request)
+            content = json
         }.andExpect {
             status { isCreated() }
             jsonPath("$.productId") { value(1L) }
@@ -112,6 +116,55 @@ class ProductControllerTest {
                 jsonPath("$[0].name") { value(response[0].name)}
                 jsonPath("$[1].price") { value(response[1].price)}
                 jsonPath("$[2].stock") { value(response[2].stock)}
+            }
+    }
+
+    @Test
+    fun `상품id 리스트를 통해 여러상품 조회가 가능하다`() {
+        //given
+        val response = listOf(
+            ProductInformationResponse.fixture(),
+            ProductInformationResponse.fixture(
+                name = "로얄캐닌 고양이 사료 키튼",
+                price = 38000L,
+                stock = 500,
+            ),
+            ProductInformationResponse.fixture(
+                name = "로얄캐닌 고양이 사료 인도어",
+                price = 37000L,
+                stock = 500,
+            )
+        )
+
+        val ids: List<Long> = listOf(1L, 2L, 3L)
+        given(productService.getProductsInformation(ids)).willReturn(response)
+
+        //when & then
+        mvc.get("/api/products") {
+            param("ids", ids.joinToString(","))
+        }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$[0].name") { value(response[0].name) }
+                jsonPath("$[1].price") { value(response[1].price) }
+                jsonPath("$[2].stock") { value(response[2].stock) }
+            }
+    }
+
+
+    @Test
+    fun `상품id 리스트를 통해 조회할 때, 없는 상품이 있다면 예외가 발생한다`() {
+        //given
+        val ids: List<Long> = listOf(1L, 2L, 3L)
+        given(productService.getProductsInformation(ids)).willThrow(EntityNotFoundException("다음 상품을 찾을 수 없습니다: ${ids[1]}"))
+
+        //when & then
+        mvc.get("/api/products") {
+            param("ids", ids.joinToString(","))
+        }
+            .andExpect {
+                status { isNotFound() }
+                jsonPath("$.message", equalTo("다음 상품을 찾을 수 없습니다: ${ids[1]}"))
             }
     }
 
