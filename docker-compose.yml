@@ -18,6 +18,24 @@ services:
       timeout: 5s
       retries: 10
 
+  product-mysql:
+    image: mysql:8.0
+    container_name: product-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql/product-mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+
   user-service:
     build:
       context: ./user-service
@@ -29,6 +47,21 @@ services:
     ports:
       - "8080:8080"
     environment:
-      MYSQL_URL: ${MYSQL_URL}
+      MYSQL_URL: ${USER_MYSQL_URL}
+      MYSQL_USERNAME: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    container_name: product-service
+    depends_on:
+      product-mysql:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      MYSQL_URL: ${PRODUCT_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
