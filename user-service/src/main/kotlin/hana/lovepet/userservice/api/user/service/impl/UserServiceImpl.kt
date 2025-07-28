@@ -10,13 +10,17 @@ import hana.lovepet.userservice.api.user.service.UserService
 import hana.lovepet.userservice.common.clock.TimeProvider
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
 @Service
+@Transactional(readOnly = true)
 class UserServiceImpl(
     private val userRepository: UserRepository,
     private val timeProvider: TimeProvider
 ) : UserService {
+
+    @Transactional
     override fun registerUser(userRegisterRequest: UserRegisterRequest): UserRegisterResponse {
         val user = User(
             name = userRegisterRequest.name,
