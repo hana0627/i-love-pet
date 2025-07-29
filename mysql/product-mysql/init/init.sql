@@ -7,5 +7,13 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at DATETIME
 );
 
-INSERT INTO products (name, price, stock, created_at, updated_at) VALUES
-    ('로얄캐닌 고양이 사료', 35000, 1000, '2024-07-01 10:00:00', '2024-07-01 10:00:00');
+INSERT INTO products (id, name, price, stock, created_at, updated_at) VALUES
+    (1, '로얄캐닌 고양이 사료', 35000, 300, '2024-07-01 10:00:00', '2024-07-01 10:00:00');
+INSERT INTO products (id, name, price, stock, created_at, updated_at) VALUES
+    (2, '로얄캐닌 고양이 사료 키튼', 37000, 300, '2024-07-01 10:00:00', '2024-07-01 10:00:00');
+INSERT INTO products (id, name, price, stock, created_at, updated_at) VALUES
+    (3, '로얄캐닌 고양이 사료 인도어', 32000, 300, '2024-07-01 10:00:00', '2024-07-01 10:00:00');
+INSERT INTO products (id, name, price, stock, created_at, updated_at) VALUES
+    (4, '가수분해 강아지 사료', 40000, 300, '2024-07-01 10:00:00', '2024-07-01 10:00:00');
+INSERT INTO products (id, name, price, stock, created_at, updated_at) VALUES
+    (5, '고단백 강아지 사료', 42000, 300, '2024-07-01 10:00:00', '2024-07-01 10:00:00');

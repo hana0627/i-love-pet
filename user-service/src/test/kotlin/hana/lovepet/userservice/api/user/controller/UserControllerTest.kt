@@ -104,7 +104,7 @@ class UserControllerTest {
         given(userService.isUserExists(userId)).willReturn(userExistResponse)
 
         //when & then
-        mvc.get("/api/users/{userId}/exist", userId)
+        mvc.get("/api/users/{userId}/exists", userId)
             .andExpect { status { isOk() }
                 jsonPath("$.exist", equalTo(true))
             }
@@ -122,7 +122,7 @@ class UserControllerTest {
         given(userService.isUserExists(userId)).willReturn(userExistResponse)
 
         //when & then
-        mvc.get("/api/users/{userId}/exist", userId)
+        mvc.get("/api/users/{userId}/exiss", userId)
             .andExpect { status { isOk() }
                 jsonPath("$.exist", equalTo(false))
             }

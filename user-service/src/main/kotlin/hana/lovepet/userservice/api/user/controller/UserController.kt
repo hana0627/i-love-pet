@@ -32,7 +32,7 @@ class UserController (
         return ResponseEntity.ok(result)
     }
 
-    @GetMapping("/{userId}/exist")
+    @GetMapping("/{userId}/exists")
     fun existUser(@PathVariable("userId") userId:Long): ResponseEntity<UserExistResponse> {
         val result = userService.isUserExists(userId)
         return ResponseEntity.ok(result)

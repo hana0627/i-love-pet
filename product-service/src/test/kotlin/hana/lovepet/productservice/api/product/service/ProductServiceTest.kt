@@ -60,7 +60,7 @@ class ProductServiceTest {
         //given
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 26, 9, 0, 0))
         val productId = 1L
-        val product = Product.fixture(timeProvider = timeProvider)
+        val product = Product.fixture(timeProvider = timeProvider).apply { id = productId }
 
         given(productRepository.findById(productId)).willReturn(Optional.of(product))
 
@@ -113,6 +113,7 @@ class ProductServiceTest {
 
         val responses = products.map {
             ProductInformationResponse(
+                productId = it.id!!,
                 name = it.name,
                 price = it.price,
                 stock = it.stock,

@@ -16,7 +16,7 @@ class UserServiceClientImpl(
 
     override fun getUser(userId: Long): UserExistResponse {
         return webClient.get()
-            .uri("/api/products/$userId/exists")
+            .uri("/api/users/$userId/exists")
             .retrieve()
             .bodyToMono(UserExistResponse::class.java)
             .block()

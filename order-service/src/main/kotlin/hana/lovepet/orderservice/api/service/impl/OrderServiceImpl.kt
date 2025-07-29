@@ -10,7 +10,7 @@ import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInfoResponse
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.stereotype.Service
@@ -36,8 +36,7 @@ class OrderServiceImpl (
 
         // STEP3. 상품 정보 조회 (배치 API 사용)
         val productIds: List<Long> = orderCreateRequest.items.map { it.productId }
-        val productsInfos: List<ProductInfoResponse> = productServiceClient.getProducts(productIds)
-
+        val productsInfos: List<ProductInformationResponse> = productServiceClient.getProducts(productIds)
         // STEP4. 상품정보검증
         validateProductInfo(orderCreateRequest.items, productsInfos)
 
@@ -86,19 +85,19 @@ class OrderServiceImpl (
         userServiceClient.getUser(orderCreateRequest.userId)
     }
 
-    private fun validateProductInfo(orderItemRequests: List<OrderItemRequest>, productsInfos: List<ProductInfoResponse>) {
+    private fun validateProductInfo(orderItemRequests: List<OrderItemRequest>, productsInfos: List<ProductInformationResponse>) {
         val requestedIds = orderItemRequests.map { it.productId }
         val foundIds     = productsInfos.map { it.productId }
         val missing      = requestedIds - foundIds
         if (missing.isNotEmpty()) {
-            throw EntityNotFoundException("존재하지 않는 상품 ID: $missing")
+            throw EntityNotFoundException("존재하지 않는 상품 productId: $missing")
         }
 
         orderItemRequests.forEach { req ->
             // .first -> 조건에 일치하는 첫번째 요소
             val stock = productsInfos.first { it.productId == req.productId }.stock
             if (stock < req.quantity) {
-                throw IllegalStateException("재고 부족: ${req.productId}")
+                throw IllegalStateException("재고 부족 productId: ${req.productId}")
             }
         }
     }

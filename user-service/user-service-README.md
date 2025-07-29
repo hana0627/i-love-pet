@@ -70,10 +70,10 @@ curl http://localhost:8080/api/users/1
 
 ```
 ### 회원 존재 확인
-`GET /api/users/{userId}/exist`
+`GET /api/users/{userId}/exists`
 #### 요청
 ```bash
-curl http://localhost:8080/api/users/1/exist
+curl http://localhost:8080/api/users/1/exists
 ```
 
 #### 응답

@@ -34,6 +34,7 @@ class ProductServiceImpl(
     override fun getProductInformation(productId: Long): ProductInformationResponse {
         val foundProduct = getProductOrException(productId)
         return ProductInformationResponse(
+            productId = foundProduct.id!!,
             name = foundProduct.name,
             price = foundProduct.price,
             stock = foundProduct.stock,
@@ -43,6 +44,7 @@ class ProductServiceImpl(
     override fun getAllProducts(): List<ProductInformationResponse> {
         return productRepository.findAll().map {
             ProductInformationResponse(
+                productId = it.id!!,
                 name = it.name,
                 price = it.price,
                 stock = it.stock,
@@ -58,13 +60,15 @@ class ProductServiceImpl(
             throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
         }
 
-        return entities.map {
+        val temp = entities.map {
             ProductInformationResponse(
+                productId = it.id!!,
                 name = it.name,
                 price = it.price,
                 stock = it.stock,
             )
         }
+        return temp
     }
 
 //    override fun getStock(productId: Long): Int {

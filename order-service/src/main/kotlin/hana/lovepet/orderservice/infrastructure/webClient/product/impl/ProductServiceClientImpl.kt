@@ -1,7 +1,7 @@
 package hana.lovepet.orderservice.infrastructure.webClient.product.impl
 
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInfoResponse
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 
@@ -14,7 +14,7 @@ class ProductServiceClientImpl(
         .baseUrl("http://product-service:8080")
         .build()
 
-    override fun getProducts(productIds: List<Long>): List<ProductInfoResponse> {
+    override fun getProducts(productIds: List<Long>): List<ProductInformationResponse> {
         val ids = productIds.joinToString(",")
 
         return try {
@@ -23,7 +23,7 @@ class ProductServiceClientImpl(
                     .queryParam("ids", ids)
                     .build() }
                 .retrieve()
-                .bodyToFlux(ProductInfoResponse::class.java)
+                .bodyToFlux(ProductInformationResponse::class.java)
                 .collectList()
                 .block()!!
                 .also { responses ->

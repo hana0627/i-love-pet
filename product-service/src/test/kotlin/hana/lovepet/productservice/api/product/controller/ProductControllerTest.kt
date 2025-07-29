@@ -25,9 +25,6 @@ import org.springframework.test.web.servlet.post
 class ProductControllerTest {
 
     @Autowired
-    private lateinit var messageSource: MessageSource
-
-    @Autowired
     lateinit var mvc: MockMvc
 
     @MockitoBean

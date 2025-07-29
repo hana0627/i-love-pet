@@ -25,7 +25,7 @@ class Order (
 
     var price: Long = 0
 
-    @Column(nullable = true, name = "created_at")
+    @Column(nullable = true, name = "updated_at")
     var updatedAt: LocalDateTime? = null
 
 

@@ -9,7 +9,7 @@ import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInfoResponse
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
 import jakarta.persistence.EntityNotFoundException
@@ -162,7 +162,7 @@ class OrderServiceTest {
         then(orderRepository).should().save(any())
         then(productServiceClient).should().getProducts(ids)
 
-        assertThat(result.message).isEqualTo("존재하지 않는 상품 ID: [${productsInfos[3].productId}, ${productsInfos[4].productId}]")
+        assertThat(result.message).isEqualTo("존재하지 않는 상품 productId: [${productsInfos[3].productId}, ${productsInfos[4].productId}]")
     }
 
     @Test
@@ -189,7 +189,7 @@ class OrderServiceTest {
         then(orderRepository).should().save(any())
         then(productServiceClient).should().getProducts(ids)
 
-        assertThat(result.message).isEqualTo("재고 부족: ${productsInfos[0].productId}")
+        assertThat(result.message).isEqualTo("재고 부족 productId: ${productsInfos[0].productId}")
 
     }
 
@@ -217,13 +217,13 @@ class OrderServiceTest {
 
 
 
-    private fun getProductsInfo(items: List<OrderItemRequest>): List<ProductInfoResponse> {
+    private fun getProductsInfo(items: List<OrderItemRequest>): List<ProductInformationResponse> {
         return listOf(
-            ProductInfoResponse(productId = items[0].productId, price = 30000L, 1000),
-            ProductInfoResponse(productId = items[1].productId, price = 35000L, 1000),
-            ProductInfoResponse(productId = items[2].productId, price = 40000L, 1000),
-            ProductInfoResponse(productId = items[3].productId, price = 55000L, 1000),
-            ProductInfoResponse(productId = items[4].productId, price = 30000L, 1000),
+            ProductInformationResponse(productId = items[0].productId, name = "로얄캐닌 고양이 사료", price = 30000L, 1000),
+            ProductInformationResponse(productId = items[1].productId, name = "로얄캐닌 고양이 사료 키튼", price = 35000L, 1000),
+            ProductInformationResponse(productId = items[2].productId, name = "로얄캐닌 고양이 사료 인도어", price = 40000L, 1000),
+            ProductInformationResponse(productId = items[3].productId, name = "가수분해 강아지 사료" , price = 55000L, 1000),
+            ProductInformationResponse(productId = items[4].productId, name = "고단백 강아지 사료", price = 30000L, 1000),
         )
     }
 
