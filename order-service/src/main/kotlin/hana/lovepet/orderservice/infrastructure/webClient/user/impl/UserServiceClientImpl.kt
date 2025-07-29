@@ -1,0 +1,25 @@
+package hana.lovepet.orderservice.infrastructure.webClient.user.impl
+
+import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
+import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.client.WebClient
+
+@Component
+class UserServiceClientImpl(
+    builder: WebClient.Builder,
+) : UserServiceClient {
+
+    private val webClient = builder
+        .baseUrl("http://user-service:8080")
+        .build()
+
+    override fun getUser(userId: Long): UserExistResponse {
+        return webClient.get()
+            .uri("/api/products/$userId/exists")
+            .retrieve()
+            .bodyToMono(UserExistResponse::class.java)
+            .block()
+            ?: throw RuntimeException("error occurred while retrieving user exists [id : $userId]")
+    }
+}

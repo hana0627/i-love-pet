@@ -1,0 +1,85 @@
+package hana.lovepet.orderservice.api.controller
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import hana.lovepet.orderservice.api.controller.dto.request.OrderCreateRequest
+import hana.lovepet.orderservice.api.controller.dto.request.OrderItemRequest
+import hana.lovepet.orderservice.api.controller.dto.response.OrderCreateResponse
+import hana.lovepet.orderservice.api.service.OrderService
+import hana.lovepet.orderservice.common.exception.RestControllerHandler
+import org.junit.jupiter.api.Test
+import org.mockito.BDDMockito.given
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
+import org.springframework.test.context.bean.override.mockito.MockitoBean
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.post
+
+@WebMvcTest(OrderController::class)
+@Import(RestControllerHandler::class)
+class OrderControllerTest {
+    @Autowired
+    lateinit var mvc: MockMvc
+
+    @MockitoBean
+    lateinit var orderService: OrderService
+
+    @Autowired
+    lateinit var om: ObjectMapper
+
+    @Test
+    fun `주문 생성에 성공한다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val request = OrderCreateRequest(userId, items)
+
+        val json = om.writeValueAsString(request)
+
+        given(orderService.createOrder(request)).willReturn(OrderCreateResponse(1L))
+
+        //when & then
+        mvc.post("/api/orders") {
+            contentType = MediaType.APPLICATION_JSON
+            content = json
+        }
+            .andExpect { status { isCreated() }}
+            .andExpect { jsonPath("$.orderId") { value(1L) } }
+            .andDo { println() }
+    }
+
+    @Test
+    fun `주문에 실패할 수 있다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val request = OrderCreateRequest(userId, items)
+
+        val json = om.writeValueAsString(request)
+
+        given(orderService.createOrder(request)).willThrow(IllegalStateException("재고 부족: ${items[0].productId}"))
+
+        //when & then
+        mvc.post("/api/orders") {
+            contentType = MediaType.APPLICATION_JSON
+            content = json
+        }
+            .andExpect { status { is5xxServerError() }}
+            .andExpect { jsonPath("$.message") { value("재고 부족: ${items[0].productId}") } }
+            .andDo { println() }
+
+
+    }
+
+
+    private fun getItems(): List<OrderItemRequest> {
+        return listOf(
+            OrderItemRequest(1L, 30000L, 1),
+            OrderItemRequest(2L, 35000L, 1),
+            OrderItemRequest(3L, 40000L, 5),
+            OrderItemRequest(4L, 55000L, 7),
+            OrderItemRequest(5L, 30000L, 10)
+        )
+    }
+}
