@@ -1,2 +1,2 @@
 rootProject.name='i-love-pet'
-include ':user-service', ':product-service', ':order-service'
+include ':user-service', ':product-service', ':order-service', ':payment-service'
