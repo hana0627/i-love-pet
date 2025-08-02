@@ -76,7 +76,15 @@ class OrderServiceImpl (
     }
 
     private fun createAndSaveOrder(orderCreateRequest: OrderCreateRequest): Order {
-        val order = Order.create(orderCreateRequest.userId, timeProvider)
+        // 주문번호 생성
+        val todayString = timeProvider.todayString()
+        val maxOrderNo = orderRepository.findMaxOrderNoByToday("$todayString%")
+        val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
+        val orderNo = todayString + "%07d".format(nextSeq)
+
+
+
+        val order = Order.create(orderCreateRequest.userId, orderNo, timeProvider)
         val savedOrder = orderRepository.save(order)
         return savedOrder
     }

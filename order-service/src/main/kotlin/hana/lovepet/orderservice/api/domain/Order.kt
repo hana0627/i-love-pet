@@ -6,11 +6,18 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
+// TODO ERD update
 @Entity
-@Table(name = "orders")
+@Table(
+    name = "orders",
+    indexes = [Index(name = "idx_order_no", columnList = "order_no", unique = true)]
+)
 class Order (
     @Column(nullable = false, name = "user_id")
     val userId: Long,
+
+    @Column(nullable = false, name = "order_no", unique = true, length = 32)
+    val orderNo: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -32,10 +39,12 @@ class Order (
     companion object{
         fun create(
             userId: Long,
+            orderNo: String,
             timeProvider: TimeProvider
         ): Order{
             return Order(
                 userId = userId,
+                orderNo = orderNo,
                 status = CREATED,
                 createdAt = timeProvider.now(),
             )
@@ -44,9 +53,10 @@ class Order (
 
         fun fixture(
             userId: Long = 1L,
+            orderNo: String = "2025080100000001",
             timeProvider: TimeProvider
         ): Order{
-            return Order(userId, CREATED, timeProvider.now())
+            return Order(userId, orderNo, CREATED, timeProvider.now())
         }
     }
 

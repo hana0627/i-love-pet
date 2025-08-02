@@ -23,6 +23,7 @@ import org.mockito.BDDMockito.*
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDateTime
+import java.util.*
 
 @ExtendWith(MockitoExtension::class)
 class OrderServiceTest {
@@ -60,9 +61,12 @@ class OrderServiceTest {
         val userId = 1L
         val items = getItems()
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
         val orderCreateRequest = OrderCreateRequest(userId, items)
-        val order = Order.create(orderCreateRequest.userId, timeProvider)
+        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
@@ -77,6 +81,46 @@ class OrderServiceTest {
 
         //then
         then(userServiceClient).should().getUser(userId)
+        then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
+        then(orderRepository).should(times(2)).save(any())
+        then(productServiceClient).should().getProducts(ids)
+        then(orderItemRepository).should().saveAll(listOf(any()))
+
+        assertThat(result.orderId).isEqualTo(order.id)
+        assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED)
+        assertThat(order.userId).isEqualTo(userId)
+        assertThat(order.createdAt).isEqualTo(timeProvider.now())
+        assertThat(order.price).isEqualTo(
+            items.sumOf { it.price * it.quantity }
+        )
+    }
+    @Test
+    fun `상품주문에 성공한다 하루 최초주문`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn(null)
+
+        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val order = Order.create(orderCreateRequest.userId,"${todayString}00000001", timeProvider)
+
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
+
+
+        val productsInfo = getProductsInfo(items)
+        val ids = orderCreateRequest.items.map { it.productId }
+        given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+
+        //when
+        val result = orderService.createOrder(orderCreateRequest)
+
+        //then
+        then(userServiceClient).should().getUser(userId)
+        then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
         then(orderRepository).should(times(2)).save(any())
         then(productServiceClient).should().getProducts(ids)
         then(orderItemRepository).should().saveAll(listOf(any()))
@@ -115,7 +159,8 @@ class OrderServiceTest {
         val userId = 1L
         val items = getItems()
         val orderCreateRequest = OrderCreateRequest(userId, items)
-        val order = Order.create(orderCreateRequest.userId, timeProvider)
+
+        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
@@ -141,7 +186,7 @@ class OrderServiceTest {
         val userId = 1L
         val items = getItems()
         val orderCreateRequest = OrderCreateRequest(userId, items)
-        val order = Order.create(orderCreateRequest.userId, timeProvider)
+        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
@@ -172,7 +217,7 @@ class OrderServiceTest {
         val userId = 1L
         val items = getItemsWithTooManyQuantity()
         val orderCreateRequest = OrderCreateRequest(userId, items)
-        val order = Order.create(orderCreateRequest.userId, timeProvider)
+        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })

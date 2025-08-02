@@ -36,6 +36,7 @@ class OrderTest {
         //then
         assertThat(order).isNotNull
         assertThat(order.userId).isEqualTo(userId)
+        assertThat(order.orderNo).isEqualTo("2025080100000001")
         assertThat(order.status).isEqualTo(OrderStatus.CREATED)
         assertThat(order.createdAt).isEqualTo(timeProvider.now())
         assertThat(order.updatedAt).isNull()
