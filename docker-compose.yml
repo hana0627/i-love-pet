@@ -52,6 +52,23 @@ services:
       timeout: 5s
       retries: 10
 
+  payment-mysql:
+    image: mysql:8.0
+    container_name: payment-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3309:3306"
+    volumes:
+      - ./mysql/payment-mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   user-service:
     build:
       context: ./user-service
@@ -96,3 +113,19 @@ services:
       MYSQL_URL: ${ORDER_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    depends_on:
+      payment-mysql:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+    environment:
+      MYSQL_URL: ${PAYMENT_MYSQL_URL}
+      MYSQL_USERNAME: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
