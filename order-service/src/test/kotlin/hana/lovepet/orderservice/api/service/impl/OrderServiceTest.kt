@@ -8,6 +8,9 @@ import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
+import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
@@ -29,19 +32,16 @@ import java.util.*
 class OrderServiceTest {
     @Mock
     lateinit var orderRepository: OrderRepository
-
     @Mock
     lateinit var orderItemRepository: OrderItemRepository
-
-    @Mock
-    lateinit var productServiceClient: ProductServiceClient
-
-    @Mock
-    lateinit var userServiceClient: UserServiceClient
-
     @Mock
     lateinit var timeProvider: TimeProvider
-
+    @Mock
+    lateinit var productServiceClient: ProductServiceClient
+    @Mock
+    lateinit var userServiceClient: UserServiceClient
+    @Mock
+    lateinit var paymentServiceClient: PaymentServiceClient
     lateinit var orderService: OrderService
 
     @BeforeEach
@@ -49,9 +49,10 @@ class OrderServiceTest {
         orderService = OrderServiceImpl(
             orderRepository,
             orderItemRepository,
+            timeProvider,
             productServiceClient,
             userServiceClient,
-            timeProvider
+            paymentServiceClient,
         )
     }
 
@@ -60,12 +61,13 @@ class OrderServiceTest {
         //given
         val userId = 1L
         val items = getItems()
+        val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val todayString = "20250710"
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
         val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
@@ -75,6 +77,11 @@ class OrderServiceTest {
         val productsInfo = getProductsInfo(items)
         val ids = orderCreateRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
         val result = orderService.createOrder(orderCreateRequest)
@@ -84,27 +91,27 @@ class OrderServiceTest {
         then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
         then(orderRepository).should(times(2)).save(any())
         then(productServiceClient).should().getProducts(ids)
+        then(paymentServiceClient).should().approve(paymentCreateRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
 
         assertThat(result.orderId).isEqualTo(order.id)
         assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED)
         assertThat(order.userId).isEqualTo(userId)
         assertThat(order.createdAt).isEqualTo(timeProvider.now())
-        assertThat(order.price).isEqualTo(
-            items.sumOf { it.price * it.quantity }
-        )
+        assertThat(order.price).isEqualTo(totalPrice)
     }
     @Test
     fun `상품주문에 성공한다 하루 최초주문`() {
         //given
         val userId = 1L
         val items = getItems()
+        val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val todayString = "20250710"
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn(null)
 
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
         val order = Order.create(orderCreateRequest.userId,"${todayString}00000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
@@ -114,6 +121,11 @@ class OrderServiceTest {
         val productsInfo = getProductsInfo(items)
         val ids = orderCreateRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
         val result = orderService.createOrder(orderCreateRequest)
@@ -123,15 +135,14 @@ class OrderServiceTest {
         then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
         then(orderRepository).should(times(2)).save(any())
         then(productServiceClient).should().getProducts(ids)
+        then(paymentServiceClient).should().approve(paymentCreateRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
 
         assertThat(result.orderId).isEqualTo(order.id)
         assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED)
         assertThat(order.userId).isEqualTo(userId)
         assertThat(order.createdAt).isEqualTo(timeProvider.now())
-        assertThat(order.price).isEqualTo(
-            items.sumOf { it.price * it.quantity }
-        )
+        assertThat(order.price).isEqualTo(totalPrice)
     }
 
 
@@ -140,7 +151,8 @@ class OrderServiceTest {
         //given
         val userId = 9999L
         val items = getItems()
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val method = "카드"
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
 
         given(userServiceClient.getUser(userId)).willThrow(RuntimeException("error occurred while retrieving user exists [id : $userId]"))
 
@@ -158,7 +170,8 @@ class OrderServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
         val items = getItems()
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val method = "카드"
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
 
         val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
@@ -185,7 +198,8 @@ class OrderServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
         val items = getItems()
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val method = "카드"
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
         val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
@@ -215,8 +229,9 @@ class OrderServiceTest {
         //given
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
+        val method = "카드"
         val items = getItemsWithTooManyQuantity()
-        val orderCreateRequest = OrderCreateRequest(userId, items)
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
         val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))

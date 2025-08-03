@@ -9,6 +9,8 @@ import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
+import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
@@ -21,9 +23,10 @@ import org.springframework.transaction.annotation.Transactional
 class OrderServiceImpl (
     private val orderRepository: OrderRepository,
     private val orderItemRepository: OrderItemRepository,
+    private val timeProvider: TimeProvider,
     private val productServiceClient: ProductServiceClient,
     private val userServiceClient: UserServiceClient,
-    private val timeProvider: TimeProvider
+    private val paymentServiceClient: PaymentServiceClient,
 ) : OrderService{
 
     @Transactional
@@ -50,15 +53,15 @@ class OrderServiceImpl (
         savedOrder.updateTotalPrice(totalPrice)
 
         // STEP8. (미구현) 페이먼트 연동
-        // → PaymentServiceClient.authorize(...)
-        // → kafka 이벤트 발행 or 동기 응답 처리
-        // 주문완료 처리
+        approvePayment(orderCreateRequest, savedOrder, totalPrice)
+
         savedOrder.confirm(timeProvider)
 
         orderRepository.save(savedOrder)
 
         return OrderCreateResponse(savedOrder.id!!)
     }
+
 
     private fun createOrderItems(orderId: Long, items: List<OrderItemRequest>): List<OrderItem> {
         val orderItems = items.map {
@@ -107,6 +110,30 @@ class OrderServiceImpl (
             if (stock < req.quantity) {
                 throw IllegalStateException("재고 부족 productId: ${req.productId}")
             }
+        }
+    }
+
+
+    private fun approvePayment(
+        orderCreateRequest: OrderCreateRequest,
+        savedOrder: Order,
+        totalPrice: Long
+    ) {
+        val paymentRequest = PaymentCreateRequest(
+            userId = orderCreateRequest.userId,
+            orderId = savedOrder.id!!,
+            amount = totalPrice,
+            method = orderCreateRequest.method
+        )
+
+        val paymentResponse = try {
+            paymentServiceClient.approve(paymentRequest)
+        } catch (e: Exception) {
+            throw RuntimeException("주문 결제 중 오류 발생: ${e.message}", e)
+        }
+
+        if (paymentResponse.failReason != null) {
+            throw IllegalStateException("결제 실패: ${paymentResponse.failReason}")
         }
     }
 

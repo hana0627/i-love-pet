@@ -33,7 +33,8 @@ class OrderControllerTest {
         //given
         val userId = 1L
         val items = getItems()
-        val request = OrderCreateRequest(userId, items)
+        val method = "카드"
+        val request = OrderCreateRequest(userId, method, items)
 
         val json = om.writeValueAsString(request)
 
@@ -54,7 +55,8 @@ class OrderControllerTest {
         //given
         val userId = 1L
         val items = getItems()
-        val request = OrderCreateRequest(userId, items)
+        val method = "카드"
+        val request = OrderCreateRequest(userId, method, items)
 
         val json = om.writeValueAsString(request)
 
