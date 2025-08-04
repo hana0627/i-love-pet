@@ -6,7 +6,6 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
-// TODO ERD update
 @Entity
 @Table(
     name = "orders",
