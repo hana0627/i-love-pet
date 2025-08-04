@@ -1,8 +1,10 @@
 package hana.lovepet.productservice.api.product.service.impl
 
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
+import hana.lovepet.productservice.api.product.controller.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
+import hana.lovepet.productservice.api.product.controller.dto.response.ProductStockDecreaseResponse
 import hana.lovepet.productservice.api.product.domain.Product
 import hana.lovepet.productservice.api.product.repository.ProductRepository
 import hana.lovepet.productservice.api.product.service.ProductService
@@ -15,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional(readOnly = true)
 class ProductServiceImpl(
     private val productRepository: ProductRepository,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
 ) : ProductService {
 
     @Transactional
@@ -69,6 +71,25 @@ class ProductServiceImpl(
             )
         }
         return temp
+    }
+
+    @Transactional
+    override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
+        val ids = productStockDecreaseRequests.map {it.productId}
+
+        val products = productRepository.findAllById(ids)
+
+        val productMap = products.associateBy { it.id }
+
+        productStockDecreaseRequests.forEach {
+            val product = productMap[it.productId]
+                ?: throw EntityNotFoundException("상품 ${it.productId} 없음")
+            product.decreaseStock(it.quantity, timeProvider)
+        }
+
+        productRepository.saveAll(products)
+
+        return ProductStockDecreaseResponse(true)
     }
 
 //    override fun getStock(productId: Long): Int {

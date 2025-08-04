@@ -12,7 +12,7 @@ import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentService
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
 import jakarta.persistence.EntityNotFoundException
@@ -26,7 +26,6 @@ import org.mockito.BDDMockito.*
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDateTime
-import java.util.*
 
 @ExtendWith(MockitoExtension::class)
 class OrderServiceTest {
@@ -251,6 +250,73 @@ class OrderServiceTest {
 
         assertThat(result.message).isEqualTo("재고 부족 productId: ${productsInfos[0].productId}")
 
+    }
+    
+    @Test
+    fun `상품 주문중 통신오류 등의 이유로 예외가 발생할 수 있다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val method = "카드"
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
+
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
+
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
+
+
+        val productsInfo = getProductsInfo(items)
+        val ids = orderCreateRequest.items.map { it.productId }
+        given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(RuntimeException("PG 통신 실패"))
+
+        //when
+        val result = assertThrows<RuntimeException> {orderService.createOrder(orderCreateRequest)}
+
+        //then
+        assertThat(result.message).isEqualTo("주문 결제 중 오류 발생: PG 통신 실패")
+    }
+
+    @Test
+    fun `상품 주문 중 잔액 부족등의 이유로 예외가 발생할 수 있다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val method = "카드"
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
+
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
+
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
+
+
+        val productsInfo = getProductsInfo(items)
+        val ids = orderCreateRequest.items.map { it.productId }
+        given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", "잔액 부족")
+        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+
+        //when
+        val result = assertThrows<RuntimeException> {orderService.createOrder(orderCreateRequest)}
+
+        //then
+        assertThat(result.message).isEqualTo("결제 실패: ${paymentCreateResponse.failReason}")
     }
 
 

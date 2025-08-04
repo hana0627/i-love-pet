@@ -2,8 +2,10 @@ package hana.lovepet.productservice.api.product.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
+import hana.lovepet.productservice.api.product.controller.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
+import hana.lovepet.productservice.api.product.controller.dto.response.ProductStockDecreaseResponse
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.common.exception.RestControllerHandler
 import jakarta.persistence.EntityNotFoundException
@@ -18,6 +20,7 @@ import org.springframework.http.MediaType
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 
 @WebMvcTest(ProductController::class)
@@ -109,10 +112,10 @@ class ProductControllerTest {
         mvc.get("/api/products")
             .andExpect {
                 status { isOk() }
-                jsonPath("$.size()") { value(response.size)}
-                jsonPath("$[0].name") { value(response[0].name)}
-                jsonPath("$[1].price") { value(response[1].price)}
-                jsonPath("$[2].stock") { value(response[2].stock)}
+                jsonPath("$.size()") { value(response.size) }
+                jsonPath("$[0].name") { value(response[0].name) }
+                jsonPath("$[1].price") { value(response[1].price) }
+                jsonPath("$[2].stock") { value(response[2].stock) }
             }
     }
 
@@ -163,6 +166,57 @@ class ProductControllerTest {
                 status { isNotFound() }
                 jsonPath("$.message", equalTo("다음 상품을 찾을 수 없습니다: ${ids[1]}"))
             }
+    }
+
+    @Test
+    fun `상품 재고감소 요청에 성공한다`() {
+        //given
+        val requests = listOf(
+            ProductStockDecreaseRequest(productId = 1L, quantity = 1),
+            ProductStockDecreaseRequest(productId = 2L, quantity = 2),
+            ProductStockDecreaseRequest(productId = 3L, quantity = 3),
+        )
+
+        val json = om.writeValueAsString(requests)
+
+        given(productService.decreaseStock(requests)).willReturn(ProductStockDecreaseResponse(true))
+
+
+        //when & then
+        mvc.patch("/api/products/decrease-stock") {
+            contentType = MediaType.APPLICATION_JSON
+            content = json
+        }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.isSuccess", equalTo(true))
+            }
+            .andDo { print() }
+    }
+    @Test
+    fun `상품 재고감소시 예외가 발생할 수 있다`() {
+        //given
+        val requests = listOf(
+            ProductStockDecreaseRequest(productId = 1L, quantity = 1),
+            ProductStockDecreaseRequest(productId = 2L, quantity = 2),
+            ProductStockDecreaseRequest(productId = 3L, quantity = 3),
+        )
+
+        val json = om.writeValueAsString(requests)
+
+        given(productService.decreaseStock(requests)).willThrow(EntityNotFoundException("상품 ${requests[1].productId} 없음"))
+
+
+        //when & then
+        mvc.patch("/api/products/decrease-stock") {
+            contentType = MediaType.APPLICATION_JSON
+            content = json
+        }
+            .andExpect {
+                status { isNotFound() }
+                jsonPath("$.message", equalTo("상품 ${requests[1].productId} 없음"))
+            }
+            .andDo { print() }
     }
 
 //    @Test

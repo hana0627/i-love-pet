@@ -46,16 +46,16 @@ class Product (
     }
 
 
-    fun decreaseStock(amount: Int, timeProvider: TimeProvider) {
-        if(stock < amount) {
+    fun decreaseStock(quantity: Int, timeProvider: TimeProvider) {
+        if(stock < quantity) {
             throw IllegalStateException("재고가 부족합니다.")
         }
-        stock -= amount
+        stock -= quantity
         updatedAt = timeProvider.now()
     }
 
-    fun increaseStock(amount: Int, timeProvider: TimeProvider) {
-        stock += amount
+    fun increaseStock(quantity: Int, timeProvider: TimeProvider) {
+        stock += quantity
         updatedAt = timeProvider.now()
     }
 

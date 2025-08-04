@@ -12,7 +12,8 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.ProductInformationResponse
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.stereotype.Service
@@ -29,6 +30,17 @@ class OrderServiceImpl (
     private val paymentServiceClient: PaymentServiceClient,
 ) : OrderService{
 
+    /**
+     * 1. 상품 정보는 먼저 조회하여 재고 및 가격 등의 유효성만 검증
+     * 2. 결제가 최종 승인된 이후에만 상품 재고를 차감
+     *
+     * "비가역 작업(재고 차감)은 가장 마지막에 배치"하여
+     *    - 결제 실패 시 불필요한 보상 트랜잭션을 방지하고
+     *    - 장애 복구 및 상태 정합성을 유지할 수 있도록 설계함
+     *
+     * 재고 차감이 앞단에 위치하면 결제 실패 시 롤백이 어려워지고,
+     *     product-service와의 불필요한 coupling 또는 보상 트랜잭션 설계가 필요해짐
+     */
     @Transactional
     override fun createOrder(orderCreateRequest: OrderCreateRequest): OrderCreateResponse {
         // STEP1. 유저 검증
@@ -52,12 +64,15 @@ class OrderServiceImpl (
         // STEP7. Order 엔티티에 총 주문금액 저장
         savedOrder.updateTotalPrice(totalPrice)
 
-        // STEP8. (미구현) 페이먼트 연동
+        // STEP8. 페이먼트 연동
         approvePayment(orderCreateRequest, savedOrder, totalPrice)
 
+        // STEP9. 주문정보 저장
         savedOrder.confirm(timeProvider)
-
         orderRepository.save(savedOrder)
+
+        // STEP10. 재고감소
+        decreaseStock(orderCreateRequest.items)
 
         return OrderCreateResponse(savedOrder.id!!)
     }
@@ -73,7 +88,7 @@ class OrderServiceImpl (
             )
         }
 
-        orderItemRepository.saveAll(orderItems) // 부수 효과: 저장
+        orderItemRepository.saveAll(orderItems)
         return orderItems
 
     }
@@ -84,8 +99,6 @@ class OrderServiceImpl (
         val maxOrderNo = orderRepository.findMaxOrderNoByToday("$todayString%")
         val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
         val orderNo = todayString + "%07d".format(nextSeq)
-
-
 
         val order = Order.create(orderCreateRequest.userId, orderNo, timeProvider)
         val savedOrder = orderRepository.save(order)
@@ -133,8 +146,13 @@ class OrderServiceImpl (
         }
 
         if (paymentResponse.failReason != null) {
-            throw IllegalStateException("결제 실패: ${paymentResponse.failReason}")
+            throw RuntimeException("결제 실패: ${paymentResponse.failReason}")
         }
+    }
+
+    private fun decreaseStock(products : List<OrderItemRequest>) {
+        val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
+        productServiceClient.decreaseStock(productStockDecreaseRequests)
     }
 
 }

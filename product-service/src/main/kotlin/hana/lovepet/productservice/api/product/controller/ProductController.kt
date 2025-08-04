@@ -1,8 +1,10 @@
 package hana.lovepet.productservice.api.product.controller
 
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
+import hana.lovepet.productservice.api.product.controller.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
+import hana.lovepet.productservice.api.product.controller.dto.response.ProductStockDecreaseResponse
 import hana.lovepet.productservice.api.product.service.ProductService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -36,6 +38,12 @@ class ProductController(
     @GetMapping(params = ["ids"])
     fun getProducts(@RequestParam("ids") ids: List<Long>): ResponseEntity<List<ProductInformationResponse>> {
         val response = productService.getProductsInformation(ids)
+        return ResponseEntity.ok(response)
+    }
+
+    @PatchMapping("/decrease-stock")
+    fun decreaseStock(@RequestBody productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ResponseEntity<ProductStockDecreaseResponse> {
+        val response = productService.decreaseStock(productStockDecreaseRequests)
         return ResponseEntity.ok(response)
     }
 
