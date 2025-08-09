@@ -60,6 +60,8 @@ class PaymentServiceImpl(
 
         // 4. PG 요청
         val pgResponse: PgApproveResponse
+        var isSuccess = false
+
         try {
             pgResponse = pgClient.approve(pgRequest)
         } catch (e: PgCommunicationException) {
@@ -80,9 +82,11 @@ class PaymentServiceImpl(
 
         // 5. 상태 전이
         if (pgResponse is PgApproveResponse.Success) {
+            isSuccess = true
             payment.approve(timeProvider, pgResponse.paymentKey, pgResponse.rawJson)
         }
         if (pgResponse is PgApproveResponse.Fail) {
+            isSuccess = false
             payment.fail(timeProvider, pgResponse.paymentKey, pgResponse.failReason, pgResponse.rawJson)
         }
 
@@ -95,6 +99,7 @@ class PaymentServiceImpl(
         return PaymentCreateResponse(
             paymentId = payment.id!!,
             paymentKey = payment.paymentKey,
+            isSuccess = isSuccess,
             failReason = payment.failReason
         )
     }

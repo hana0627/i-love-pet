@@ -1,5 +1,7 @@
 package hana.lovepet.orderservice.infrastructure.webClient.product.impl
 
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
@@ -33,11 +35,11 @@ class ProductServiceClientImpl(
                     val foundIds = responses.map { it.productId }.toSet()
                     val missing = productIds.filterNot { it in foundIds }
                     if (missing.isNotEmpty()) {
-                        throw RuntimeException("존재하지 않는 상품 ID: $missing")
+                        throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "존재하지 않는 상품 ID: $missing")
                     }
                 }
         } catch (e : Exception) {
-            throw RuntimeException("error occurred while trying to get products [ids: $ids]")
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "error occurred while trying to get products [ids: $ids]")
         }
     }
 
@@ -52,9 +54,9 @@ class ProductServiceClientImpl(
                 .bodyValue(requests)
                 .retrieve()
                 .bodyToMono(ProductStockDecreaseResponse::class.java)
-                .block() ?: throw IllegalStateException("재고 차감 응답이 null 입니다.")
+                .block() ?: throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "재고 차감 응답이 null 입니다.")
         } catch (e : Exception) {
-            throw RuntimeException("error occurred while trying to decrease product stocks : ${e.message}")
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION,"error occurred while trying to decrease product stocks : ${e.message}")
         }
     }
 }

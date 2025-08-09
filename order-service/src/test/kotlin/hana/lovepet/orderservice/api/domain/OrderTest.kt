@@ -69,6 +69,33 @@ class OrderTest {
         assertThat(result.message).isEqualTo("CREADTED인 상품만 CONFIRM이 가능합니다.")
 
     }
+    @Test
+    fun `주문실패에 성공한다`() {
+        //given
+        val order = Order.fixture(timeProvider = timeProvider)
+
+        //when
+        order.fail(timeProvider = timeProvider)
+
+        //then
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
+        assertThat(order.updatedAt).isNotNull()
+    }
+
+    @Test
+    fun `CREATED아닌 상품은 주문실패가 불가능하다`() {
+        //given
+        val order = Order.fixture(timeProvider = timeProvider)
+        order.confirm(timeProvider = timeProvider)
+
+        //when
+        val result = assertThrows<IllegalStateException> {order.fail(timeProvider = timeProvider)}
+
+
+        //then
+        assertThat(result.message).isEqualTo("CREATED인 상품만 FAIL이 가능합니다.")
+
+    }
 
     @Test
     fun `주문취소가 가능하다`() {

@@ -69,6 +69,14 @@ class Order (
 
     }
 
+    fun fail(timeProvider: TimeProvider) {
+        if(this.status != CREATED){
+            throw IllegalStateException("CREATED인 상품만 FAIL이 가능합니다.")
+        }
+        this.status = FAIL
+        this.updatedAt = timeProvider.now()
+    }
+
     fun cancel(timeProvider: TimeProvider) {
         if(this.status == CANCELED) {
             throw IllegalStateException("이미 취소된 상품입니다.")

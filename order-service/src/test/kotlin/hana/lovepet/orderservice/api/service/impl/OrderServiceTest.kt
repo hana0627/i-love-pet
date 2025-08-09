@@ -8,6 +8,8 @@ import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
@@ -15,7 +17,6 @@ import hana.lovepet.orderservice.infrastructure.webClient.product.ProductService
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
-import jakarta.persistence.EntityNotFoundException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,6 +34,7 @@ class OrderServiceTest {
     lateinit var orderRepository: OrderRepository
     @Mock
     lateinit var orderItemRepository: OrderItemRepository
+//    @SpyBean
     @Mock
     lateinit var timeProvider: TimeProvider
     @Mock
@@ -45,6 +47,9 @@ class OrderServiceTest {
 
     @BeforeEach
     fun setUp() {
+
+//        val orderStatusManager = spy(OrderStatusManager(orderRepository, timeProvider))
+
         orderService = OrderServiceImpl(
             orderRepository,
             orderItemRepository,
@@ -79,7 +84,7 @@ class OrderServiceTest {
         val totalPrice = items.sumOf { it.price * it.quantity }
 
         val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", true)
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
@@ -89,6 +94,7 @@ class OrderServiceTest {
         then(userServiceClient).should().getUser(userId)
         then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
         then(orderRepository).should(times(2)).save(any())
+//        then(orderRepository).should(times(3)).save(any())
         then(productServiceClient).should().getProducts(ids)
         then(paymentServiceClient).should().approve(paymentCreateRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
@@ -123,7 +129,7 @@ class OrderServiceTest {
         val totalPrice = items.sumOf { it.price * it.quantity }
 
         val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", true)
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
@@ -133,6 +139,7 @@ class OrderServiceTest {
         then(userServiceClient).should().getUser(userId)
         then(orderRepository).should().findMaxOrderNoByToday("${todayString}%")
         then(orderRepository).should(times(2)).save(any())
+//        then(orderRepository).should(times(3)).save(any())
         then(productServiceClient).should().getProducts(ids)
         then(paymentServiceClient).should().approve(paymentCreateRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
@@ -186,6 +193,7 @@ class OrderServiceTest {
         //then
         then(userServiceClient).should().getUser(userId)
         then(orderRepository).should().save(any())
+//        then(orderRepository).should(times(2)).save(any())
         then(productServiceClient).should().getProducts(ids)
 
         assertThat(result.message).isEqualTo("존재하지 않는 상품 ID: [1, 2]")
@@ -213,13 +221,15 @@ class OrderServiceTest {
         ))
 
         //when
-        val result = assertThrows<EntityNotFoundException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
-        then(orderRepository).should().save(any())
+//        then(orderRepository).should().save(any())
+        then(orderRepository).should(times(2)).save(any())
         then(productServiceClient).should().getProducts(ids)
 
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
         assertThat(result.message).isEqualTo("존재하지 않는 상품 productId: [${productsInfos[3].productId}, ${productsInfos[4].productId}]")
     }
 
@@ -241,13 +251,15 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfos)
 
         //when
-        val result = assertThrows<IllegalStateException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
-        then(orderRepository).should().save(any())
+        then(orderRepository).should(times(2)).save(any())
+//        then(orderRepository).should().save(any())
         then(productServiceClient).should().getProducts(ids)
 
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
         assertThat(result.message).isEqualTo("재고 부족 productId: ${productsInfos[0].productId}")
 
     }
@@ -276,12 +288,13 @@ class OrderServiceTest {
         val totalPrice = items.sumOf { it.price * it.quantity }
 
         val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(RuntimeException("PG 통신 실패"))
+        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(ApplicationException(ErrorCode.PAYMENTS_FAIL, "주문 결제 중 오류 발생: PG 통신 실패"))
 
         //when
-        val result = assertThrows<RuntimeException> {orderService.createOrder(orderCreateRequest)}
+        val result = assertThrows<ApplicationException> {orderService.createOrder(orderCreateRequest)}
 
         //then
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
         assertThat(result.message).isEqualTo("주문 결제 중 오류 발생: PG 통신 실패")
     }
 
@@ -309,13 +322,14 @@ class OrderServiceTest {
         val totalPrice = items.sumOf { it.price * it.quantity }
 
         val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", "잔액 부족")
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", false, "잔액 부족")
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
         val result = assertThrows<RuntimeException> {orderService.createOrder(orderCreateRequest)}
 
         //then
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
         assertThat(result.message).isEqualTo("결제 실패: ${paymentCreateResponse.failReason}")
     }
 

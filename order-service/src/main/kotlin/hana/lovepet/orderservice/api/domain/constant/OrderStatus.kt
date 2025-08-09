@@ -5,5 +5,6 @@ enum class OrderStatus(
 ) {
     CREATED("주문생성"),
     CONFIRMED("주문확정"),
+    FAIL("주문실패"),
     CANCELED("주문취소"),
 }

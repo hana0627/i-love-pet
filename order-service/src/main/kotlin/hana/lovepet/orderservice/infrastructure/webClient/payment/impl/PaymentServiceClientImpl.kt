@@ -1,5 +1,7 @@
 package hana.lovepet.orderservice.infrastructure.webClient.payment.impl
 
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
@@ -26,18 +28,18 @@ class PaymentServiceClientImpl(
                 .retrieve()
                 .onStatus({ status -> status.is4xxClientError }) { res ->
                     res.bodyToMono(String::class.java).map {
-                        throw IllegalArgumentException("결제 요청 실패: $it")
+                        throw ApplicationException(ErrorCode.PAYMENTS_REQUEST_FAIL, "결제 요청 실패: $it")
                     }
                 }
                 .onStatus({ status -> status.is5xxServerError }) { res ->
                     res.bodyToMono(String::class.java).map {
-                        throw RuntimeException("결제 서비스 장애: $it")
+                        throw ApplicationException(ErrorCode.PAYMENTS_FAIL, "결제 서비스 장애: $it")
                     }
                 }
                 .bodyToMono(PaymentCreateResponse::class.java)
-                .block() ?: throw IllegalStateException("결제 응답이 null입니다")
+                .block() ?: throw ApplicationException(ErrorCode.PAYMENTS_FAIL, "예상하지 못한 결제응답")
         } catch (e: Exception) {
-            throw RuntimeException("error occurred while communicate payment-service [orderId : ${paymentCreateRequest.orderId}]")
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "error occurred while communicate payment-service [orderId : ${paymentCreateRequest.orderId}]")
         }
 
     }

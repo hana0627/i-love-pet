@@ -12,7 +12,6 @@ import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.PgClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.PgApproveRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgApproveResponse
-import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -107,6 +106,7 @@ class PaymentServiceTest {
 
         assertThat(result.paymentKey).isEqualTo("pg-success-key")
         assertThat(result.paymentId).isEqualTo(payment.id)
+        assertThat(result.isSuccess).isEqualTo(true)
         assertThat(result.failReason).isNull()
     }
 
@@ -164,6 +164,7 @@ class PaymentServiceTest {
 
         assertThat(result.paymentKey).isEqualTo("pg-fail-key")
         assertThat(result.paymentId).isEqualTo(payment.id)
+        assertThat(result.isSuccess).isEqualTo(false)
         assertThat(result.failReason).isEqualTo("잔액 부족")
     }
 

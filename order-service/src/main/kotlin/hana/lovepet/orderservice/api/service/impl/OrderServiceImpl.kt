@@ -9,26 +9,30 @@ import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode.*
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
-import jakarta.persistence.EntityNotFoundException
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
 @Transactional(readOnly = true)
-class OrderServiceImpl (
+class OrderServiceImpl(
     private val orderRepository: OrderRepository,
     private val orderItemRepository: OrderItemRepository,
     private val timeProvider: TimeProvider,
     private val productServiceClient: ProductServiceClient,
     private val userServiceClient: UserServiceClient,
     private val paymentServiceClient: PaymentServiceClient,
-) : OrderService{
+) : OrderService {
+    val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
 
     /**
      * 1. 상품 정보는 먼저 조회하여 재고 및 가격 등의 유효성만 검증
@@ -41,42 +45,64 @@ class OrderServiceImpl (
      * 재고 차감이 앞단에 위치하면 결제 실패 시 롤백이 어려워지고,
      *     product-service와의 불필요한 coupling 또는 보상 트랜잭션 설계가 필요해짐
      */
-    @Transactional
+    @Transactional(noRollbackFor = [ApplicationException::class])
     override fun createOrder(orderCreateRequest: OrderCreateRequest): OrderCreateResponse {
+        var isPaymentApproved = false;
         // STEP1. 유저 검증
         validateUser(orderCreateRequest)
 
         // STEP2. Order 엔티티 생성 및 저장
         val savedOrder = createAndSaveOrder(orderCreateRequest)
 
-        // STEP3. 상품 정보 조회 (배치 API 사용)
-        val productIds: List<Long> = orderCreateRequest.items.map { it.productId }
-        val productsInfos: List<ProductInformationResponse> = productServiceClient.getProducts(productIds)
-        // STEP4. 상품정보검증
-        validateProductInfo(orderCreateRequest.items, productsInfos)
 
-        // STEP5. OrderItem 엔티티 생성
-        val orderItems = createOrderItems(savedOrder.id!!, orderCreateRequest.items)
+        try {
+            // STEP3. 상품 정보 조회
+            val productIds: List<Long> = orderCreateRequest.items.map { it.productId }
+            val productsInfos: List<ProductInformationResponse> = productServiceClient.getProducts(productIds)
 
-        // STEP6. 총 결제금액 계산
-        val totalPrice = orderItems.sumOf { it.price * it.quantity }
+            // STEP4. OrderItem 엔티티 생성
+            val orderItems = createOrderItems(savedOrder.id!!, orderCreateRequest.items)
 
-        // STEP7. Order 엔티티에 총 주문금액 저장
-        savedOrder.updateTotalPrice(totalPrice)
+            // STEP5. 상품정보검증
+            validateProductInfo(orderCreateRequest.items, productsInfos)
 
-        // STEP8. 페이먼트 연동
-        approvePayment(orderCreateRequest, savedOrder, totalPrice)
+            // STEP6. 총 결제금액 계산
+            val totalPrice = orderItems.sumOf { it.price * it.quantity }
 
-        // STEP9. 주문정보 저장
-        savedOrder.confirm(timeProvider)
+            // STEP7. Order 엔티티에 총 주문금액 저장
+            savedOrder.updateTotalPrice(totalPrice)
+
+            // STEP8. 페이먼트 연동
+            approvePayment(orderCreateRequest, savedOrder, totalPrice)
+            isPaymentApproved = true
+
+            // STEP9. 재고감소
+            // TODO --> 장애발생시 결제취소요청 실행 필요함
+            decreaseStock(orderCreateRequest.items)
+
+            // STEP10. 주문 확정
+            savedOrder.confirm(timeProvider)
+
+        } catch (e: ApplicationException) {
+            // 결제 이후 예외발생
+            if (isPaymentApproved) {
+                // 결제취소 로직 추가
+            }
+            // 결제이전 예외 발생
+            else {
+                log.warn(e.message)
+            }
+
+            savedOrder.fail(timeProvider)
+            orderRepository.save(savedOrder)
+
+            throw ApplicationException(e.errorCode, e.message)
+        }
+
         orderRepository.save(savedOrder)
-
-        // STEP10. 재고감소
-        decreaseStock(orderCreateRequest.items)
 
         return OrderCreateResponse(savedOrder.id!!)
     }
-
 
     private fun createOrderItems(orderId: Long, items: List<OrderItemRequest>): List<OrderItem> {
         val orderItems = items.map {
@@ -109,19 +135,22 @@ class OrderServiceImpl (
         userServiceClient.getUser(orderCreateRequest.userId)
     }
 
-    private fun validateProductInfo(orderItemRequests: List<OrderItemRequest>, productsInfos: List<ProductInformationResponse>) {
+    private fun validateProductInfo(
+        orderItemRequests: List<OrderItemRequest>,
+        productsInfos: List<ProductInformationResponse>,
+    ) {
         val requestedIds = orderItemRequests.map { it.productId }
-        val foundIds     = productsInfos.map { it.productId }
-        val missing      = requestedIds - foundIds
+        val foundIds = productsInfos.map { it.productId }
+        val missing = requestedIds - foundIds
         if (missing.isNotEmpty()) {
-            throw EntityNotFoundException("존재하지 않는 상품 productId: $missing")
+            throw ApplicationException(PRODUCT_NOT_FOUND, "존재하지 않는 상품 productId: $missing")
         }
 
         orderItemRequests.forEach { req ->
             // .first -> 조건에 일치하는 첫번째 요소
             val stock = productsInfos.first { it.productId == req.productId }.stock
             if (stock < req.quantity) {
-                throw IllegalStateException("재고 부족 productId: ${req.productId}")
+                throw ApplicationException(NOT_ENOUGH_STOCK, "재고 부족 productId: ${req.productId}")
             }
         }
     }
@@ -130,7 +159,7 @@ class OrderServiceImpl (
     private fun approvePayment(
         orderCreateRequest: OrderCreateRequest,
         savedOrder: Order,
-        totalPrice: Long
+        totalPrice: Long,
     ) {
         val paymentRequest = PaymentCreateRequest(
             userId = orderCreateRequest.userId,
@@ -139,20 +168,21 @@ class OrderServiceImpl (
             method = orderCreateRequest.method
         )
 
-        val paymentResponse = try {
-            paymentServiceClient.approve(paymentRequest)
-        } catch (e: Exception) {
-            throw RuntimeException("주문 결제 중 오류 발생: ${e.message}", e)
-        }
+        val paymentResponse = paymentServiceClient.approve(paymentRequest)
 
-        if (paymentResponse.failReason != null) {
-            throw RuntimeException("결제 실패: ${paymentResponse.failReason}")
+        if (!paymentResponse.isSuccess) {
+            throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
         }
     }
 
-    private fun decreaseStock(products : List<OrderItemRequest>) {
+    private fun decreaseStock(products: List<OrderItemRequest>) {
         val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
         productServiceClient.decreaseStock(productStockDecreaseRequests)
     }
+
+//    private fun cancelOrder(savedOrder: Order) {
+//        savedOrder.cancel(timeProvider)
+//        orderRepository.save(savedOrder)
+//    }
 
 }

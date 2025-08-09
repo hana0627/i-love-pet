@@ -51,6 +51,8 @@ class PaymentControllerTest {
             .andExpect { status { isCreated() } }
             .andExpect { jsonPath("$.paymentId") { value(response.paymentId) } }
             .andExpect { jsonPath("$.paymentKey") { value(response.paymentKey) } }
+            .andExpect { jsonPath("$.isSuccess") { value(response.isSuccess) } }
+            .andExpect { jsonPath("$.failReason") { value(response.failReason) } }
             .andDo { println() }
     }
 
