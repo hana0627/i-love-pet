@@ -11,9 +11,11 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
@@ -27,6 +29,7 @@ import org.mockito.BDDMockito.*
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDateTime
+import kotlin.math.E
 
 @ExtendWith(MockitoExtension::class)
 class OrderServiceTest {
@@ -310,7 +313,7 @@ class OrderServiceTest {
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
         val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
+        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
 
         given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
@@ -326,11 +329,90 @@ class OrderServiceTest {
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
-        val result = assertThrows<RuntimeException> {orderService.createOrder(orderCreateRequest)}
+        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
 
         //then
         assertThat(order.status).isEqualTo(OrderStatus.FAIL)
         assertThat(result.message).isEqualTo("결제 실패: ${paymentCreateResponse.failReason}")
+    }
+
+    @Test
+    fun `결제 성공 이후에 예외가 발생하면 결제 취소 요청이 발생한다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val method = "카드"
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
+
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
+
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
+
+
+        val productsInfo = getProductsInfo(items)
+        val ids = orderCreateRequest.items.map { it.productId }
+        given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+
+        given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
+
+        //when
+        val result = assertThrows<ApplicationException> { orderService.createOrder(orderCreateRequest) }
+
+        //then
+        then(paymentServiceClient).should().cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))
+
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
+        assertThat(result.message).isEqualTo(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION.message)
+    }
+
+    @Test
+    fun `결제 취소 요청이 실패할 수 있다`() {
+        //given
+        val userId = 1L
+        val items = getItems()
+        val method = "카드"
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
+        val todayString = "20250710"
+        given(timeProvider.todayString()).willReturn(todayString)
+        given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
+
+        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
+
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(orderRepository.save(any())).willReturn(order.apply { id = 1L }.apply { paymentId = 1000L })
+
+
+        val productsInfo = getProductsInfo(items)
+        val ids = orderCreateRequest.items.map { it.productId }
+        given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
+        val totalPrice = items.sumOf { it.price * it.quantity }
+
+        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
+        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+
+        given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
+        given(paymentServiceClient.cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))).willThrow(ApplicationException(ErrorCode.PAYMENTS_FAIL))
+
+        //when
+        val result = assertThrows<ApplicationException> { orderService.createOrder(orderCreateRequest) }
+
+        //then
+        then(paymentServiceClient).should().cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))
+
+        assertThat(order.status).isEqualTo(OrderStatus.FAIL)
+        assertThat(result.message).isEqualTo(ErrorCode.PAYMENTS_FAIL.message)
     }
 
 

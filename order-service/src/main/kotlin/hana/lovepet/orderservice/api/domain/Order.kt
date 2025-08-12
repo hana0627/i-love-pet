@@ -11,6 +11,7 @@ import java.time.LocalDateTime
     name = "orders",
     indexes = [Index(name = "idx_order_no", columnList = "order_no", unique = true)]
 )
+//TODO ERD update
 class Order (
     @Column(nullable = false, name = "user_id")
     val userId: Long,
@@ -30,6 +31,9 @@ class Order (
     var id: Long? = null
 
     var price: Long = 0
+
+    @Column(name = "payment_id")
+    var paymentId: Long = 0
 
     @Column(nullable = true, name = "updated_at")
     var updatedAt: LocalDateTime? = null
@@ -88,4 +92,9 @@ class Order (
     fun updateTotalPrice(totalPrice: Long) {
         this.price = totalPrice
     }
+
+    fun assignPaymentId(paymentId: Long) {
+        this.paymentId = paymentId
+    }
+
 }

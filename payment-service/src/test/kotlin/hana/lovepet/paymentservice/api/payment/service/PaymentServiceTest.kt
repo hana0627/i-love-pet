@@ -1,8 +1,10 @@
 package hana.lovepet.paymentservice.api.payment.service
 
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
 import hana.lovepet.paymentservice.api.payment.domain.Payment
 import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
+import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
 import hana.lovepet.paymentservice.api.payment.repository.PaymentLogRepository
 import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
 import hana.lovepet.paymentservice.api.payment.service.impl.PaymentServiceImpl
@@ -12,6 +14,7 @@ import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.PgClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.PgApproveRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgApproveResponse
+import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +28,7 @@ import org.mockito.Mockito.times
 import org.mockito.junit.jupiter.MockitoExtension
 import org.springframework.test.util.ReflectionTestUtils
 import java.time.LocalDateTime
+import java.util.*
 
 @ExtendWith(MockitoExtension::class)
 class PaymentServiceTest {
@@ -65,7 +69,7 @@ class PaymentServiceTest {
             paymentKey = uuidGenerator.generate(),
             amount = request.amount,
             method = request.method,
-            requestedAt = timeProvider.now()
+            requestedAt = timeProvider.now(),
         ).apply { id = 1L }
 
         val pgRequest = PgApproveRequest(
@@ -79,7 +83,7 @@ class PaymentServiceTest {
             paymentKey = "pg-success-key",
             amount = request.amount,
             method = request.method!!,
-            rawJson = "{\"result\":\"ok\"}"
+//            rawJson = "{\"result\":\"ok\"}"
         )
 
         given(paymentRepository.save(any())).willAnswer { invocation ->
@@ -136,8 +140,10 @@ class PaymentServiceTest {
 
         val pgFailResponse = PgApproveResponse.Fail(
             paymentKey = "pg-fail-key",
-            rawJson = "{\"result\":\"ok\"}",
-            failReason = "잔액 부족"
+            code = "ok",
+            message = "잔액 부족"
+//            rawJson = "{\"result\":\"ok\"}",
+//            failReason = "잔액 부족"
         )
 
         given(paymentRepository.save(any())).willAnswer { invocation ->
@@ -247,4 +253,154 @@ class PaymentServiceTest {
 
         assertThat(result).isInstanceOf(PgCommunicationException::class.java)
     }
+
+
+    @Test
+    fun `결제취소에 성공한다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
+        given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+        val paymentId = 1L
+        val paymentCancelRequest = PaymentCancelRequest("재고차감 실패")
+        val payment = Payment(
+            userId = 2000L,
+            orderId = 3000L,
+            paymentKey = uuidGenerator.generate(),
+            amount = 40000L,
+            method = "카드",
+            requestedAt = timeProvider.now(),
+            approvedAt = timeProvider.now(),
+            status = PaymentStatus.SUCCESS,
+        ).apply { id = paymentId }
+
+        given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
+
+        val paCancelResponse = PgCancelResponse.success(
+            paymentKey = payment.paymentKey,
+            transactionKey = "transactionKey",
+            cancelAt = timeProvider.now()
+        )
+        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
+            .willReturn(paCancelResponse)
+
+        //when
+        val result = paymentService.cancelPayment(paymentId, paymentCancelRequest)
+
+        //then
+        assertThat(result.paymentId).isEqualTo(paymentId)
+        assertThat(result.transactionKey).isEqualTo(paCancelResponse.transactionKey)
+        assertThat(result.canceledAt).isEqualTo(timeProvider.now())
+        assertThat(result.message).isEqualTo("성공적으로 취소 되었습니다.")
+    }
+
+
+    @Test
+    fun `이미 결제취소가 이루어 졌다면 결제취소가 일어나지 않는다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
+        given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+        val paymentId = 1L
+        val paymentCancelRequest = PaymentCancelRequest("재고차감 실패")
+        val payment = Payment(
+            userId = 2000L,
+            orderId = 3000L,
+            paymentKey = uuidGenerator.generate(),
+            amount = 40000L,
+            method = "카드",
+            requestedAt = timeProvider.now(),
+            approvedAt = timeProvider.now(),
+            canceledAt = timeProvider.now(),
+            status = PaymentStatus.CANCELED,
+        ).apply { id = paymentId }
+
+        given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
+
+        //when
+        val result = paymentService.cancelPayment(paymentId, paymentCancelRequest)
+
+        //then
+        assertThat(result.paymentId).isEqualTo(paymentId)
+        assertThat(result.transactionKey).isNull()
+        assertThat(result.canceledAt).isEqualTo(timeProvider.now())
+        assertThat(result.message).isEqualTo("이미 취소된 결제입니다.")
+    }
+
+
+
+    @Test
+    fun `이미 결제취소가 되었는데 PG사에 취소요청을 보내도 결제취소가 다시 일어나지 않는다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
+        given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+        val paymentId = 1L
+        val paymentCancelRequest = PaymentCancelRequest("재고차감 실패")
+        val payment = Payment(
+            userId = 2000L,
+            orderId = 3000L,
+            paymentKey = uuidGenerator.generate(),
+            amount = 40000L,
+            method = "카드",
+            requestedAt = timeProvider.now(),
+            approvedAt = timeProvider.now(),
+            status = PaymentStatus.SUCCESS,
+        ).apply { id = paymentId }
+
+        given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
+
+        val paCancelResponse = PgCancelResponse.fail(
+            paymentKey = payment.paymentKey,
+            code = "ALREADY_CANCELED_PAYMENT",
+            message = "이미 취소된 결제 입니다."
+        )
+        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
+            .willReturn(paCancelResponse)
+
+        //when
+        val result = paymentService.cancelPayment(paymentId, paymentCancelRequest)
+
+        //then
+        assertThat(result.paymentId).isEqualTo(paymentId)
+        assertThat(result.transactionKey).isNull()
+        assertThat(result.canceledAt).isNull()
+        assertThat(result.message).isEqualTo(paCancelResponse.message)
+    }
+
+    @Test
+    fun `PG사 통신 예외가 발생하면 예외를 던지고 결제취소가 진행되지 않는다`() {
+        //given
+        given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
+        given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+        val paymentId = 1L
+        val paymentCancelRequest = PaymentCancelRequest("재고차감 실패")
+        val payment = Payment(
+            userId = 2000L,
+            orderId = 3000L,
+            paymentKey = uuidGenerator.generate(),
+            amount = 40000L,
+            method = "카드",
+            requestedAt = timeProvider.now(),
+            approvedAt = timeProvider.now(),
+            status = PaymentStatus.SUCCESS,
+        ).apply { id = paymentId }
+
+        given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
+
+        val paCancelResponse = PgCancelResponse.fail(
+            paymentKey = payment.paymentKey,
+            code = "ALREADY_CANCELED_PAYMENT",
+            message = "이미 취소된 결제 입니다."
+        )
+        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason)).willThrow(PgCommunicationException("PG사의 응답이 없습니다."))
+
+        //when
+        val result = assertThrows<PgCommunicationException> {paymentService.cancelPayment(paymentId, paymentCancelRequest)}
+
+        //then
+        assertThat(result.message).isEqualTo("PG사의 응답이 없습니다.")
+    }
+
 }

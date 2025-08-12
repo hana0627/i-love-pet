@@ -5,6 +5,7 @@ import hana.lovepet.paymentservice.common.clock.TimeProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
+// ERD update
 @Entity
 @Table(name = "payments")
 class Payment(
@@ -45,8 +46,8 @@ class Payment(
     @Column(name = "fail_reason", length = 200)
     var failReason: String? = null, // 취소사유
 
-    @Column(name = "pg_response", columnDefinition = "TEXT")
-    var pgResponse: String? = null,
+//    @Column(name = "pg_response", columnDefinition = "TEXT")
+//    var pgResponse: String? = null,
 
     @Column(name = "updated_at")
     var updatedAt: LocalDateTime? = null,
@@ -60,25 +61,23 @@ class Payment(
     /**
      * 결제 성공
      */
-    fun approve(timeProvider: TimeProvider, paymentKey: String, pgResponse: String?) {
+    fun approve(timeProvider: TimeProvider, paymentKey: String) {
         if (this.status != PaymentStatus.PENDING) throw IllegalStateException("결제 승인 불가 상태입니다.")
         this.status = PaymentStatus.SUCCESS
         this.approvedAt = timeProvider.now()
         this.paymentKey = paymentKey
-        this.pgResponse = pgResponse
         this.updatedAt = timeProvider.now()
     }
 
     /**
      * 결제 실패
      */
-    fun fail(timeProvider: TimeProvider, paymentKey: String?, failReason: String?, pgResponse: String?) {
+    fun fail(timeProvider: TimeProvider, paymentKey: String?, failReason: String?) {
         if (this.status != PaymentStatus.PENDING) throw IllegalStateException("결제 실패 불가 상태입니다.")
         this.status = PaymentStatus.FAIL
         this.paymentKey = paymentKey ?: this.paymentKey
         this.failedAt = timeProvider.now()
         this.failReason = failReason
-        this.pgResponse = pgResponse
         this.updatedAt = timeProvider.now()
     }
 
@@ -88,7 +87,6 @@ class Payment(
     fun cancel(timeProvider: TimeProvider, description: String?) {
         if (status == PaymentStatus.CANCELED) {throw IllegalStateException("이미 취소된 요청입니다.")}
         else if (status != PaymentStatus.SUCCESS) {throw IllegalStateException("승인된 결제만 취소할 수 있습니다.")}
-
         this.status = PaymentStatus.CANCELED
         this.canceledAt = timeProvider.now()
         this.description = description

@@ -12,7 +12,9 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode.*
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
@@ -47,13 +49,12 @@ class OrderServiceImpl(
      */
     @Transactional(noRollbackFor = [ApplicationException::class])
     override fun createOrder(orderCreateRequest: OrderCreateRequest): OrderCreateResponse {
-        var isPaymentApproved = false;
+
         // STEP1. 유저 검증
         validateUser(orderCreateRequest)
 
         // STEP2. Order 엔티티 생성 및 저장
         val savedOrder = createAndSaveOrder(orderCreateRequest)
-
 
         try {
             // STEP3. 상품 정보 조회
@@ -73,30 +74,37 @@ class OrderServiceImpl(
             savedOrder.updateTotalPrice(totalPrice)
 
             // STEP8. 페이먼트 연동
-            approvePayment(orderCreateRequest, savedOrder, totalPrice)
-            isPaymentApproved = true
+            try {
+                val response = approvePayment(orderCreateRequest, savedOrder, totalPrice)
+                savedOrder.assignPaymentId(response.paymentId)
+            } catch (e: ApplicationException) {
+                // 결제 실패
+                log.info("결제 실패 orderId : {}, error : {}", savedOrder.id, e.getMessage)
+                throw ApplicationException(PAYMENTS_FAIL, e.getMessage)
+            }
 
             // STEP9. 재고감소
-            // TODO --> 장애발생시 결제취소요청 실행 필요함
-            decreaseStock(orderCreateRequest.items)
+            try {
+                decreaseStock(orderCreateRequest.items)
+            } catch (e: ApplicationException) {
+                // 재고차감 실패
+                log.info("재고 차감 실패 : ${e.getMessage}")
+                try {
+                    paymentServiceClient.cancel(paymentId = savedOrder.paymentId, PaymentCancelRequest(refundReason = "상품 재고 차감 실패"))
+                } catch (e: ApplicationException) {
+                    log.error("결제 취소 실패(수동 보상 필요) orderId=${savedOrder.id}, reason=${e.getMessage}")
+                    throw ApplicationException(e.errorCode, e.getMessage)
+                }
+                throw ApplicationException(STOCK_DECREASE_FAIL, e.getMessage)
+            }
 
             // STEP10. 주문 확정
             savedOrder.confirm(timeProvider)
 
         } catch (e: ApplicationException) {
-            // 결제 이후 예외발생
-            if (isPaymentApproved) {
-                // 결제취소 로직 추가
-            }
-            // 결제이전 예외 발생
-            else {
-                log.warn(e.message)
-            }
-
             savedOrder.fail(timeProvider)
             orderRepository.save(savedOrder)
-
-            throw ApplicationException(e.errorCode, e.message)
+            throw ApplicationException(e.errorCode, e.getMessage)
         }
 
         orderRepository.save(savedOrder)
@@ -122,6 +130,7 @@ class OrderServiceImpl(
     private fun createAndSaveOrder(orderCreateRequest: OrderCreateRequest): Order {
         // 주문번호 생성
         val todayString = timeProvider.todayString()
+        // TODO Redis 사용
         val maxOrderNo = orderRepository.findMaxOrderNoByToday("$todayString%")
         val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
         val orderNo = todayString + "%07d".format(nextSeq)
@@ -160,7 +169,7 @@ class OrderServiceImpl(
         orderCreateRequest: OrderCreateRequest,
         savedOrder: Order,
         totalPrice: Long,
-    ) {
+    ): PaymentCreateResponse{
         val paymentRequest = PaymentCreateRequest(
             userId = orderCreateRequest.userId,
             orderId = savedOrder.id!!,
@@ -169,10 +178,15 @@ class OrderServiceImpl(
         )
 
         val paymentResponse = paymentServiceClient.approve(paymentRequest)
-
-        if (!paymentResponse.isSuccess) {
+//        if(!paymentResponse.isSuccess){
+//            throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
+//        }
+        if (paymentResponse.isSuccess) {
+            return paymentResponse
+        } else {
             throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
         }
+
     }
 
     private fun decreaseStock(products: List<OrderItemRequest>) {

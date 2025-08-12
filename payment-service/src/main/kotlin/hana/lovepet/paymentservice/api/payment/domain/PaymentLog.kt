@@ -29,9 +29,9 @@ class PaymentLog(
 
 
     companion object {
-        fun request(paymentId: Long, requestJson: String) = PaymentLog(paymentId, LogType.REQUEST, requestJson)
-        fun response(paymentId: Long, responseJson: String) = PaymentLog(paymentId, LogType.RESPONSE, responseJson)
-        fun error(paymentId: Long, errorMessage: String) = PaymentLog(paymentId, LogType.ERROR, errorMessage)
+        fun request(paymentId: Long, message: String) = PaymentLog(paymentId, LogType.REQUEST, message)
+        fun response(paymentId: Long, message: String) = PaymentLog(paymentId, LogType.RESPONSE, message)
+        fun error(paymentId: Long, message: String) = PaymentLog(paymentId, LogType.ERROR, message)
     }
 
 }

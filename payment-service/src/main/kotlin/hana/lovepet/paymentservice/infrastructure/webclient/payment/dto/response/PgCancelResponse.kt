@@ -1,27 +1,29 @@
 package hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response
 
-sealed class PgApproveResponse {
+import java.time.LocalDateTime
+
+sealed class PgCancelResponse {
     abstract val paymentKey: String
 
     data class Success(
         override val paymentKey: String,
-        val amount: Long,
-        val method: String,
-    ) : PgApproveResponse()
+        val transactionKey: String,
+        val cancelAt: LocalDateTime,
+    ) : PgCancelResponse()
 
     data class Fail(
         override val paymentKey: String,
         val code: String,
         val message: String,
-    ) : PgApproveResponse()
+    ) : PgCancelResponse()
 
     fun isSuccess(): Boolean {
         return this is Success
     }
 
     companion object {
-        fun success(paymentKey: String, amount: Long, method: String) =
-            Success(paymentKey, amount, method)
+        fun success(paymentKey: String, transactionKey: String, cancelAt: LocalDateTime) =
+            Success(paymentKey, transactionKey, cancelAt)
 
         fun fail(paymentKey: String, code: String, message: String) =
             Fail(paymentKey, code, message)

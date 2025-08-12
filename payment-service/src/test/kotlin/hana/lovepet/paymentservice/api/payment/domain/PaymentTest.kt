@@ -64,13 +64,12 @@ class PaymentTest {
         val pgResponse = "{\"result\":\"ok\"}"
 
         //when
-        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey, pgResponse = pgResponse)
+        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey)
 
         //then
         assertThat(payment.status).isEqualTo(PaymentStatus.SUCCESS)
         assertThat(payment.approvedAt).isEqualTo(timeProvider.now())
         assertThat(payment.paymentKey).isEqualTo(realPaymentKey)
-        assertThat(payment.pgResponse).isEqualTo(pgResponse)
         assertThat(payment.updatedAt).isEqualTo(timeProvider.now())
     }
 
@@ -83,14 +82,13 @@ class PaymentTest {
         )
         val realPaymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1"
         val pgResponse = "{\"result\":\"ok\"}"
-        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey, pgResponse = pgResponse)
+        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey)
 
         //when
         val result = assertThrows<IllegalStateException> {
             payment.approve(
                 timeProvider = timeProvider,
                 paymentKey = realPaymentKey,
-                pgResponse = pgResponse
             )
         }
 
@@ -114,7 +112,6 @@ class PaymentTest {
         payment.fail(
             timeProvider = timeProvider,
             paymentKey = realPaymentKey,
-            pgResponse = pgResponse,
             failReason = failReason
         )
 
@@ -123,7 +120,6 @@ class PaymentTest {
         assertThat(payment.paymentKey).isEqualTo(realPaymentKey)
         assertThat(payment.failedAt).isEqualTo(timeProvider.now())
         assertThat(payment.failReason).isEqualTo(failReason)
-        assertThat(payment.pgResponse).isEqualTo(pgResponse)
         assertThat(payment.updatedAt).isEqualTo(timeProvider.now())
     }
 
@@ -143,7 +139,6 @@ class PaymentTest {
         payment.fail(
             timeProvider = timeProvider,
             paymentKey = realPaymentKey,
-            pgResponse = pgResponse,
             failReason = failReason
         )
 
@@ -152,7 +147,6 @@ class PaymentTest {
         assertThat(payment.paymentKey).isEqualTo("temp_pgid_UUID")
         assertThat(payment.failedAt).isEqualTo(timeProvider.now())
         assertThat(payment.failReason).isEqualTo(failReason)
-        assertThat(payment.pgResponse).isEqualTo(pgResponse)
         assertThat(payment.updatedAt).isEqualTo(timeProvider.now())
     }
 
@@ -167,14 +161,13 @@ class PaymentTest {
         val failReason = "한도초과"
         val pgResponse = """{"code":"REJECT_CARD_PAYMENT","message":"한도초과 혹은 잔액부족으로 결제에 실패했습니다."}"""
 
-        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey, pgResponse = pgResponse)
+        payment.approve(timeProvider = timeProvider, paymentKey = realPaymentKey)
 
         //when
         val result = assertThrows<IllegalStateException> {
             payment.fail(
                 timeProvider = timeProvider,
                 paymentKey = realPaymentKey,
-                pgResponse = pgResponse,
                 failReason = failReason
             )
         }
@@ -191,7 +184,7 @@ class PaymentTest {
                 approve(
                     timeProvider = timeProvider,
                     paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
-                    pgResponse = "{\"result\":\"ok\"}"
+//                    pgResponse = "{\"result\":\"ok\"}"
                 )
             }
 
@@ -215,7 +208,7 @@ class PaymentTest {
                 approve(
                     timeProvider = timeProvider,
                     paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
-                    pgResponse = "{\"result\":\"ok\"}"
+//                    pgResponse = "{\"result\":\"ok\"}"
                 )
             }
 
@@ -245,7 +238,7 @@ class PaymentTest {
         payment.fail(
             timeProvider = timeProvider,
             paymentKey = realPaymentKey,
-            pgResponse = pgResponse,
+//            pgResponse = pgResponse,
             failReason = failReason
         )
 
@@ -271,7 +264,7 @@ class PaymentTest {
                 approve(
                     timeProvider = timeProvider,
                     paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
-                    pgResponse = "{\"result\":\"ok\"}"
+//                    pgResponse = "{\"result\":\"ok\"}"
                 )
             }
 
@@ -295,7 +288,7 @@ class PaymentTest {
                 approve(
                     timeProvider = timeProvider,
                     paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
-                    pgResponse = "{\"result\":\"ok\"}"
+//                    pgResponse = "{\"result\":\"ok\"}"
                 )
             }
             .apply { cancel(timeProvider = timeProvider, description = "단순 변심") }
@@ -320,7 +313,7 @@ class PaymentTest {
             timeProvider = timeProvider,
             paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
             failReason = "한도초과",
-            pgResponse = "{\"code\":\"LIMIT_OVER\"}"
+//            pgResponse = "{\"code\":\"LIMIT_OVER\"}"
         )
 
         // when
@@ -340,7 +333,7 @@ class PaymentTest {
                 approve(
                     timeProvider = timeProvider,
                     paymentKey = "5EnNZRJGvaBX7zk2yd8ydw26XvwXkLrx9POLqKQjmAw4b0e1",
-                    pgResponse = "{\"result\":\"ok\"}"
+//                    pgResponse = "{\"result\":\"ok\"}"
                 )
             }
 
