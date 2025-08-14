@@ -1,6 +1,7 @@
 package hana.lovepet.userservice.api.user.service.impl
 
 import hana.lovepet.userservice.api.user.controller.dto.request.UserRegisterRequest
+import hana.lovepet.userservice.api.user.controller.dto.response.AllUserResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserExistResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserRegisterResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserProfileResponse
@@ -54,4 +55,15 @@ class UserServiceImpl(
         return UserExistResponse(exist = user.isPresent)
     }
 
+    override fun getAllUsers(): List<AllUserResponse> {
+        val users = userRepository.findAll()
+        return users.map {
+            AllUserResponse(
+                userId = it.id!!,
+                name = it.name,
+                email = it.email,
+                phoneNumber = it.phoneNumber,
+            )
+        }
+    }
 }

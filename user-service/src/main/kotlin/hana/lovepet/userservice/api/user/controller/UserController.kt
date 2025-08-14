@@ -1,6 +1,7 @@
 package hana.lovepet.userservice.api.user.controller
 
 import hana.lovepet.userservice.api.user.controller.dto.request.UserRegisterRequest
+import hana.lovepet.userservice.api.user.controller.dto.response.AllUserResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserExistResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserRegisterResponse
 import hana.lovepet.userservice.api.user.controller.dto.response.UserProfileResponse
@@ -24,6 +25,12 @@ class UserController (
     fun registerUser(@RequestBody userRegisterRequest: UserRegisterRequest): ResponseEntity<UserRegisterResponse>{
         val response = userService.registerUser(userRegisterRequest)
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
+    }
+
+    @GetMapping
+    fun getAllUsers(): ResponseEntity<List<AllUserResponse>>{
+        val response = userService.getAllUsers()
+        return ResponseEntity.ok(response)
     }
 
     @GetMapping("/{userId}")
