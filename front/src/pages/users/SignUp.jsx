@@ -3,7 +3,7 @@ import {useState} from "react";
 
 function SignUp() {
   const nav = useNavigate();
-  const [name, setName] = useState("");
+  const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false); // 중복 요청 방지
@@ -12,7 +12,7 @@ function SignUp() {
      if (loading) return;
 
      // 유효성 검사
-     if (!name.trim()) {
+     if (!userName.trim()) {
        alert("이름을 입력해주세요.");
        return;
      }
@@ -30,7 +30,7 @@ function SignUp() {
        const response = await fetch("http://localhost:8080/api/users", {
          method: "POST",
          headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({ name, email, phoneNumber }),
+         body: JSON.stringify({ userName, email, phoneNumber }),
        });
        if (!response.ok) {
          throw new Error(`회원가입 실패: ${response.status}`);
@@ -56,7 +56,7 @@ function SignUp() {
         <div className="form vertical">
           <label>
             <span>이름</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            <input value={userName} onChange={(e) => setUserName(e.target.value)} required />
           </label>
           <label>
             <span>이메일</span>

@@ -74,6 +74,7 @@ function OrderCreate() {
     .filter((p) => selected[p.productId] != null)
     .map((p) => ({
       productId: p.productId ?? p.id ?? p._id ?? p.name,
+      productName: p.productName ?? p._productName,
       price: Number(p.price),
       quantity: Number(selected[p.productId])
     }));
@@ -131,7 +132,7 @@ function OrderCreate() {
             <span>사용자</span>
             <select value={selectedUser ?? ""} onChange={(e) => setSelectedUser(e.target.value)}>
               {users.map((u) => (
-                <option key={u.userId} value={u.userId}>{u.name} (#{u.userId})</option>
+                <option key={u.userId} value={u.userId}>{u.userName} (#{u.userId})</option>
               ))}
             </select>
           </label>
@@ -156,7 +157,7 @@ function OrderCreate() {
                 <td>
                   <input type="checkbox" checked={checked} onChange={() => toggleCheck(pid)}/>
                 </td>
-                <td>{p.name}</td>
+                <td>{p.productName}</td>
                 <td>{p.price?.toLocaleString?.() ?? p.price}</td>
                 <td>{p.stock}</td>
                 <td>

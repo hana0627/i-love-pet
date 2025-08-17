@@ -47,7 +47,7 @@ function UserList() {
           {users.map((u) => (
             <tr key={u.userId}>
               <td>{u.userId}</td>
-              <td>{u.name}</td>
+              <td>{u.userName}</td>
               <td>{u.email}</td>
               <td>{u.phoneNumber}</td>
             </tr>

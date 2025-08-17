@@ -3,7 +3,7 @@ import {useEffect, useState} from "react";
 
 function ProductCreate() {
   const nav = useNavigate();
-  const [name, setName] = useState("");
+  const [productName, setProductName] = useState("");
   const [price, setPrice] = useState(0);
   const [stock, setStock] = useState(0);
   const [users, setUsers] = useState([]);
@@ -35,7 +35,7 @@ function ProductCreate() {
 
   async function handleSubmit() {
     if (loading) return;
-    if (!name.trim()) return alert("상품명을 입력해주세요.");
+    if (!productName.trim()) return alert("상품명을 입력해주세요.");
     if (price <= 0) return alert("가격을 입력해주세요.");
     if (stock < 0) return alert("재고를 입력해주세요.");
     if (!selectedUser) return alert("사용자를 선택해주세요.");
@@ -48,7 +48,7 @@ function ProductCreate() {
           "Content-Type": "application/json",
           "X-User-Id": String(selectedUser),
         },
-        body: JSON.stringify({name, price, stock}),
+        body: JSON.stringify({productName, price, stock}),
       });
       if (!res.ok) throw new Error("상품 등록 실패");
       const data = await res.json();
@@ -75,13 +75,13 @@ function ProductCreate() {
             <span>사용자 선택</span>
             <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
               {users.map((u) => (
-                <option key={u.userId} value={u.userId}>{u.name} (#{u.userId})</option>
+                <option key={u.userId} value={u.userId}>{u.userName} (#{u.userId})</option>
               ))}
             </select>
           </label>
           <label>
             <span>상품명</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="로얄캐닌 고양이 사료"/>
+            <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="로얄캐닌 고양이 사료"/>
           </label>
           <label>
             <span>가격</span>

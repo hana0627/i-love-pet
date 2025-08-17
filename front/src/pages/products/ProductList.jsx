@@ -37,6 +37,7 @@ function ProductList() {
         <table className="table">
           <thead>
           <tr>
+            <th>#</th>
             <th>상품명</th>
             <th>가격</th>
             <th>재고</th>
@@ -45,7 +46,8 @@ function ProductList() {
           <tbody>
           {products.map((p, i) => (
             <tr key={i}>
-              <td>{p.name}</td>
+              <td>{p.productId}</td>
+              <td>{p.productName}</td>
               <td>{p.price?.toLocaleString?.() ?? p.price}</td>
               <td>{p.stock}</td>
             </tr>

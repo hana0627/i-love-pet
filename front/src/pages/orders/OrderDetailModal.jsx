@@ -1,6 +1,6 @@
 import {useEffect} from "react";
 
-function OrderDetailModal({ open, detail, onClose, statusPill }) {
+function OrderDetailModal({ open, detail, onClose, statusPill, isLoadingPayment, isLoadingPaymentLogs, isLoadingItems }) {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
@@ -10,7 +10,7 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
 
   if (!open || !detail) return null;
 
-  const { order, payment, items, logs } = detail;
+  const { order, payment, paymentLogs,  items: items } = detail;
 
   return (
     <div
@@ -18,7 +18,7 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
         position:"fixed", inset:0, background:"rgba(0,0,0,.4)",
         display:"flex", alignItems:"center", justifyContent:"center", padding:16, zIndex:9999
       }}
-      onClick={onClose} // 바깥 클릭 닫기
+      onClick={onClose}
     >
       <div
         style={{
@@ -38,9 +38,8 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
             <div>
               <p className="section-title">주문 정보</p>
               <table className="table"><tbody>
-              <tr><td>주문ID</td><td>{order.id}</td></tr>
               <tr><td>주문번호</td><td>{order.orderNo}</td></tr>
-              <tr><td>사용자</td><td>#{order.userId}</td></tr>
+              <tr><td>사용자</td><td>{order.userName}(#{order.userId})</td></tr>
               <tr><td>상태</td><td>{statusPill(order.status)}</td></tr>
               <tr><td>금액</td><td>{(order.price||0).toLocaleString()}원</td></tr>
               <tr><td>생성</td><td>{new Date(order.createdAt).toLocaleString()}</td></tr>
@@ -49,13 +48,22 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
 
             <div>
               <p className="section-title">결제 정보</p>
-              <table className="table"><tbody>
-              <tr><td>결제ID</td><td>{payment?.id ?? '-'}</td></tr>
-              <tr><td>상태</td><td>{payment?.status ?? '-'}</td></tr>
-              <tr><td>금액</td><td>{payment?.amount?.toLocaleString?.() ?? '-'}</td></tr>
-              <tr><td>방식</td><td>{payment?.method ?? '-'}</td></tr>
-              <tr><td>사유</td><td>{payment?.failReason ?? '-'}</td></tr>
-              </tbody></table>
+              <table className="table">
+                <tbody>
+                {isLoadingPayment ? (
+                    <tr><td colSpan={5} style={{ padding:12, color:"#64748b" }}>결제 정보를 불러오는 중…</td></tr>
+                  ) : (
+                    <>
+                      <tr><td>상태</td><td>{payment?.status ?? '-'}</td></tr>
+                      <tr><td>금액</td><td>{payment?.amount?.toLocaleString?.() ?? '-'}</td></tr>
+                      <tr><td>방식</td><td>{payment?.method ?? '-'}</td></tr>
+                      <tr><td>일시</td><td>{new Date(payment.occurredAt).toLocaleString()}</td></tr>
+                      <tr><td>비고</td><td>{payment?.description ?? '-'}</td></tr>
+                    </>
+                  )
+                }
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -63,13 +71,19 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
           <table className="table" style={{ marginBottom:12 }}>
             <thead><tr><th>상품ID</th><th>수량</th><th>단가</th><th>합계</th></tr></thead>
             <tbody>
-            {(items||[]).map(it => (
-              <tr key={it.id}>
-                <td>{it.productId}</td>
-                <td>{it.quantity}</td>
-                <td>{it.price.toLocaleString()}원</td>
-                <td>{(it.price*it.quantity).toLocaleString()}원</td>
-              </tr>
+            {isLoadingItems ? (
+              <tr><td colSpan={4} style={{ padding:12, color:"#64748b" }}>상품 정보를 불러오는 중…</td></tr>
+            ) : (items.length > 0 ? (
+              items.map((it, idx) => (
+                <tr key={idx}>
+                  <td>{it.productName}(#{it.productId})</td>
+                  <td>{it.quantity}</td>
+                  <td>{Number(it.unitPrice).toLocaleString()}원</td>
+                  <td>{Number(it.lineTotal).toLocaleString()}원</td>
+                </tr>
+              ))
+            ) : (
+              <tr><td colSpan={4} style={{ padding:12, color:"#64748b" }}>표시할 상품이 없습니다.</td></tr>
             ))}
             </tbody>
           </table>
@@ -78,12 +92,18 @@ function OrderDetailModal({ open, detail, onClose, statusPill }) {
           <table className="table">
             <thead><tr><th>시간</th><th>타입</th><th>메시지</th></tr></thead>
             <tbody>
-            {(logs||[]).map(l => (
-              <tr key={l.id}>
-                <td>{new Date(l.createdAt).toLocaleString()}</td>
-                <td>{l.logType}</td>
-                <td>{l.message}</td>
-              </tr>
+            {isLoadingPaymentLogs ? (
+              <tr><td colSpan={3} style={{ padding:12, color:"#64748b" }}>결제 정보를 불러오는 중…</td></tr>
+            ) : (paymentLogs.length > 0 ? (
+              paymentLogs.map((it, idx) => (
+                <tr key={idx}>
+                  <td>{new Date(it.createdAt).toLocaleString()}</td>
+                  <td>{it.logType}</td>
+                  <td>{it.message}</td>
+                </tr>
+              ))
+            ) : (
+              <tr><td colSpan={4} style={{ padding:12, color:"#64748b" }}>표시할 기록이 없습니다.</td></tr>
             ))}
             </tbody>
           </table>
