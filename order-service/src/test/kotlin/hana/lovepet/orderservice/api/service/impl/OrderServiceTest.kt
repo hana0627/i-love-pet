@@ -1,7 +1,7 @@
 package hana.lovepet.orderservice.api.service.impl
 
-import hana.lovepet.orderservice.api.controller.dto.request.OrderCreateRequest
-import hana.lovepet.orderservice.api.controller.dto.request.OrderItemRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderItemRequest
 import hana.lovepet.orderservice.api.domain.Order
 import hana.lovepet.orderservice.api.domain.constant.OrderStatus
 import hana.lovepet.orderservice.api.repository.OrderItemRepository
@@ -15,7 +15,6 @@ import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.Pa
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
@@ -29,21 +28,25 @@ import org.mockito.BDDMockito.*
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.LocalDateTime
-import kotlin.math.E
 
 @ExtendWith(MockitoExtension::class)
 class OrderServiceTest {
     @Mock
     lateinit var orderRepository: OrderRepository
+
     @Mock
     lateinit var orderItemRepository: OrderItemRepository
-//    @SpyBean
+
+    //    @SpyBean
     @Mock
     lateinit var timeProvider: TimeProvider
+
     @Mock
     lateinit var productServiceClient: ProductServiceClient
+
     @Mock
     lateinit var userServiceClient: UserServiceClient
+
     @Mock
     lateinit var paymentServiceClient: PaymentServiceClient
     lateinit var orderService: OrderService
@@ -67,6 +70,7 @@ class OrderServiceTest {
     fun `상품주문에 성공한다`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -74,15 +78,20 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000002", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(
+            UserExistResponse(
+                userId = userId,
+                userName = userName
+            )
+        )
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
@@ -91,7 +100,7 @@ class OrderServiceTest {
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
-        val result = orderService.createOrder(orderCreateRequest)
+        val result = orderService.createOrder(createOrderRequest)
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -108,10 +117,12 @@ class OrderServiceTest {
         assertThat(order.createdAt).isEqualTo(timeProvider.now())
         assertThat(order.price).isEqualTo(totalPrice)
     }
+
     @Test
     fun `상품주문에 성공한다 하루 최초주문`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -119,15 +130,20 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn(null)
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId,"${todayString}00000001", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000001", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(
+            UserExistResponse(
+                userId = userId,
+                userName = userName
+            )
+        )
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
@@ -136,7 +152,7 @@ class OrderServiceTest {
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
-        val result = orderService.createOrder(orderCreateRequest)
+        val result = orderService.createOrder(createOrderRequest)
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -161,12 +177,12 @@ class OrderServiceTest {
         val userId = 9999L
         val items = getItems()
         val method = "카드"
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
 
         given(userServiceClient.getUser(userId)).willThrow(RuntimeException("error occurred while retrieving user exists [id : $userId]"))
 
         //when
-        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -178,20 +194,24 @@ class OrderServiceTest {
         //given
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
 
-        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
+        val order = Order.create(createOrderRequest.userId, userName, "2025071000000001", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willThrow(RuntimeException("존재하지 않는 상품 ID: [1, 2]"))
 
         //when
-        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -207,24 +227,30 @@ class OrderServiceTest {
         //given
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "2025071000000001", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         val productsInfos = getProductsInfo(items)
-        given(productServiceClient.getProducts(ids)).willReturn(listOf(
-            productsInfos[0],
-            productsInfos[1],
-            productsInfos[2],
-        ))
+        given(productServiceClient.getProducts(ids)).willReturn(
+            listOf(
+                productsInfos[0],
+                productsInfos[1],
+                productsInfos[2],
+            )
+        )
 
         //when
-        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -241,20 +267,24 @@ class OrderServiceTest {
         //given
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
         val userId = 1L
+        val userName = "박하나"
         val method = "카드"
         val items = getItemsWithTooManyQuantity()
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId, "2025071000000001", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "2025071000000001", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         val productsInfos = getProductsInfo(items)
         given(productServiceClient.getProducts(ids)).willReturn(productsInfos)
 
         //when
-        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(userServiceClient).should().getUser(userId)
@@ -266,11 +296,12 @@ class OrderServiceTest {
         assertThat(result.message).isEqualTo("재고 부족 productId: ${productsInfos[0].productId}")
 
     }
-    
+
     @Test
     fun `상품 주문중 통신오류 등의 이유로 예외가 발생할 수 있다`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -278,23 +309,31 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId,"${todayString}00000002", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000002", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
         val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(ApplicationException(ErrorCode.PAYMENTS_FAIL, "주문 결제 중 오류 발생: PG 통신 실패"))
+        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(
+            ApplicationException(
+                ErrorCode.PAYMENTS_FAIL,
+                "주문 결제 중 오류 발생: PG 통신 실패"
+            )
+        )
 
         //when
-        val result = assertThrows<ApplicationException> {orderService.createOrder(orderCreateRequest)}
+        val result = assertThrows<ApplicationException> { orderService.createOrder(createOrderRequest) }
 
         //then
         assertThat(order.status).isEqualTo(OrderStatus.FAIL)
@@ -305,6 +344,7 @@ class OrderServiceTest {
     fun `상품 주문 중 잔액 부족등의 이유로 예외가 발생할 수 있다`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -312,15 +352,18 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000002", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
@@ -329,7 +372,7 @@ class OrderServiceTest {
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         //when
-        val result = assertThrows<RuntimeException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         assertThat(order.status).isEqualTo(OrderStatus.FAIL)
@@ -340,6 +383,7 @@ class OrderServiceTest {
     fun `결제 성공 이후에 예외가 발생하면 결제 취소 요청이 발생한다`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -347,15 +391,18 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000002", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
@@ -366,7 +413,7 @@ class OrderServiceTest {
         given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
 
         //when
-        val result = assertThrows<ApplicationException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<ApplicationException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(paymentServiceClient).should().cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))
@@ -379,6 +426,7 @@ class OrderServiceTest {
     fun `결제 취소 요청이 실패할 수 있다`() {
         //given
         val userId = 1L
+        val userName = "박하나"
         val items = getItems()
         val method = "카드"
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 7, 10, 9, 0, 0))
@@ -386,15 +434,18 @@ class OrderServiceTest {
         given(timeProvider.todayString()).willReturn(todayString)
         given(orderRepository.findMaxOrderNoByToday("${todayString}%")).willReturn("${todayString}00000001")
 
-        val orderCreateRequest = OrderCreateRequest(userId, method, items)
-        val order = Order.create(orderCreateRequest.userId, "${todayString}00000002", timeProvider)
+        val createOrderRequest = CreateOrderRequest(userId, method, items)
+        val order = Order.create(createOrderRequest.userId, userName, "${todayString}00000002", timeProvider)
 
-        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(true))
+        given(userServiceClient.getUser(userId)).willReturn(UserExistResponse(
+            userId = userId,
+            userName = userName
+        ))
         given(orderRepository.save(any())).willReturn(order.apply { id = 1L }.apply { paymentId = 1000L })
 
 
         val productsInfo = getProductsInfo(items)
-        val ids = orderCreateRequest.items.map { it.productId }
+        val ids = createOrderRequest.items.map { it.productId }
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
@@ -403,10 +454,12 @@ class OrderServiceTest {
         given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
 
         given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
-        given(paymentServiceClient.cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))).willThrow(ApplicationException(ErrorCode.PAYMENTS_FAIL))
+        given(paymentServiceClient.cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))).willThrow(
+            ApplicationException(ErrorCode.PAYMENTS_FAIL)
+        )
 
         //when
-        val result = assertThrows<ApplicationException> { orderService.createOrder(orderCreateRequest) }
+        val result = assertThrows<ApplicationException> { orderService.createOrder(createOrderRequest) }
 
         //then
         then(paymentServiceClient).should().cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))
@@ -416,36 +469,35 @@ class OrderServiceTest {
     }
 
 
-    private fun getItems(): List<OrderItemRequest> {
+    private fun getItems(): List<CreateOrderItemRequest> {
         return listOf(
-            OrderItemRequest(1L, 30000L, 1),
-            OrderItemRequest(2L, 35000L, 1),
-            OrderItemRequest(3L, 40000L, 5),
-            OrderItemRequest(4L, 55000L, 7),
-            OrderItemRequest(5L, 30000L, 10)
+            CreateOrderItemRequest(1L, "로얄캐닌 고양이 사료", 30000L, 1),
+            CreateOrderItemRequest(2L, "로얄캐닌 고양이 사료 키튼", 35000L, 1),
+            CreateOrderItemRequest(3L, "로얄캐닌 고양이 사료 인도어", 40000L, 5),
+            CreateOrderItemRequest(4L, "챠오츄르 마구로", 55000L, 7),
+            CreateOrderItemRequest(5L, "챠오츄르 이카", 30000L, 10)
         )
     }
 
 
-    private fun getItemsWithTooManyQuantity(): List<OrderItemRequest> {
+    private fun getItemsWithTooManyQuantity(): List<CreateOrderItemRequest> {
         return listOf(
-            OrderItemRequest(1L, 30000L, 9999),
-            OrderItemRequest(2L, 35000L, 1),
-            OrderItemRequest(3L, 40000L, 5),
-            OrderItemRequest(4L, 55000L, 7),
-            OrderItemRequest(5L, 30000L, 10)
+            CreateOrderItemRequest(1L, "로얄캐닌 고양이 사료", 30000L, 9999),
+            CreateOrderItemRequest(2L, "로얄캐닌 고양이 사료 키튼", 35000L, 1),
+            CreateOrderItemRequest(3L, "로얄캐닌 고양이 사료 인도어", 40000L, 5),
+            CreateOrderItemRequest(4L, "챠오츄르 마구로", 55000L, 7),
+            CreateOrderItemRequest(5L, "챠오츄르 이카", 30000L, 10)
         )
     }
 
 
-
-    private fun getProductsInfo(items: List<OrderItemRequest>): List<ProductInformationResponse> {
+    private fun getProductsInfo(items: List<CreateOrderItemRequest>): List<ProductInformationResponse> {
         return listOf(
-            ProductInformationResponse(productId = items[0].productId, name = "로얄캐닌 고양이 사료", price = 30000L, 1000),
-            ProductInformationResponse(productId = items[1].productId, name = "로얄캐닌 고양이 사료 키튼", price = 35000L, 1000),
-            ProductInformationResponse(productId = items[2].productId, name = "로얄캐닌 고양이 사료 인도어", price = 40000L, 1000),
-            ProductInformationResponse(productId = items[3].productId, name = "가수분해 강아지 사료" , price = 55000L, 1000),
-            ProductInformationResponse(productId = items[4].productId, name = "고단백 강아지 사료", price = 30000L, 1000),
+            ProductInformationResponse(productId = items[0].productId, productName = "로얄캐닌 고양이 사료", price = 30000L, 1000),
+            ProductInformationResponse(productId = items[1].productId, productName = "로얄캐닌 고양이 사료 키튼", price = 35000L, 1000),
+            ProductInformationResponse(productId = items[2].productId, productName = "로얄캐닌 고양이 사료 인도어", price = 40000L, 1000),
+            ProductInformationResponse(productId = items[3].productId, productName = "가수분해 강아지 사료", price = 55000L, 1000),
+            ProductInformationResponse(productId = items[4].productId, productName = "고단백 강아지 사료", price = 30000L, 1000),
         )
     }
 

@@ -23,7 +23,7 @@ class ProductServiceImpl(
     @Transactional
     override fun register(productRegisterRequest: ProductRegisterRequest): ProductRegisterResponse {
         val product = Product(
-            name = productRegisterRequest.name,
+            name = productRegisterRequest.productName,
             price = productRegisterRequest.price,
             stock = productRegisterRequest.stock,
             createdAt = timeProvider.now()
@@ -37,7 +37,7 @@ class ProductServiceImpl(
         val foundProduct = getProductOrException(productId)
         return ProductInformationResponse(
             productId = foundProduct.id!!,
-            name = foundProduct.name,
+            productName = foundProduct.name,
             price = foundProduct.price,
             stock = foundProduct.stock,
         )
@@ -47,7 +47,7 @@ class ProductServiceImpl(
         return productRepository.findAll().map {
             ProductInformationResponse(
                 productId = it.id!!,
-                name = it.name,
+                productName = it.name,
                 price = it.price,
                 stock = it.stock,
             )
@@ -65,7 +65,7 @@ class ProductServiceImpl(
         val temp = entities.map {
             ProductInformationResponse(
                 productId = it.id!!,
-                name = it.name,
+                productName = it.name,
                 price = it.price,
                 stock = it.stock,
             )

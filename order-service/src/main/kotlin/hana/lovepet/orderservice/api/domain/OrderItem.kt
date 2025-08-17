@@ -8,6 +8,9 @@ class OrderItem (
     @Column(nullable = false, name = "product_id")
     val productId: Long,
 
+    @Column(nullable = false, name = "product_name")
+    val productName: String,
+
     @Column(nullable = false)
     val quantity: Int,
 

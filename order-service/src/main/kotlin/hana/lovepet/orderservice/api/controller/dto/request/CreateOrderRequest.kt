@@ -1,8 +1,8 @@
 package hana.lovepet.orderservice.api.controller.dto.request
 
-data class OrderCreateRequest(
+data class CreateOrderRequest(
     val userId: Long,
     val method: String? = "카드",
-    val items: List<OrderItemRequest>
+    val items: List<CreateOrderItemRequest>
 ) {
 }

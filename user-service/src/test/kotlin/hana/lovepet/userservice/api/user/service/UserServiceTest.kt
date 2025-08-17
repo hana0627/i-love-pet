@@ -41,7 +41,7 @@ class UserServiceTest {
 
         val userRegisterRequest = UserRegisterRequest.fixture()
         val user = User(
-            name = userRegisterRequest.name,
+            name = userRegisterRequest.userName,
             email = userRegisterRequest.email,
             phoneNumber = userRegisterRequest.phoneNumber,
             createdAt = timeProvider.now(),
@@ -56,7 +56,7 @@ class UserServiceTest {
         then(userRepository).should().save(any(User::class.java))
 
         assertThat(user.id).isEqualTo(registeredUser.userId)
-        assertThat(user.name).isEqualTo(registeredUser.name)
+        assertThat(user.name).isEqualTo(registeredUser.userName)
         assertThat(user.phoneNumber).isEqualTo(registeredUser.phoneNumber)
         assertThat(user.createdAt).isEqualTo(timeProvider.now())
     }
@@ -79,7 +79,7 @@ class UserServiceTest {
         then(userRepository).should().findById(userId)
 
         assertThat(foundUser.userId).isEqualTo(user.id)
-        assertThat(foundUser.name).isEqualTo(user.name)
+        assertThat(foundUser.userName).isEqualTo(user.name)
         assertThat(foundUser.email).isEqualTo(user.email)
         assertThat(foundUser.phoneNumber).isEqualTo(user.phoneNumber)
     }
@@ -116,7 +116,8 @@ class UserServiceTest {
         //then
         then(userRepository).should().findById(userId)
 
-        assertThat(result.exist).isTrue()
+        assertThat(result.userId).isEqualTo(user.id)
+        assertThat(result.userName).isEqualTo(user.name)
 
     }
 
@@ -129,12 +130,12 @@ class UserServiceTest {
         given(userRepository.findById(userId)).willReturn(Optional.empty())
 
         //when
-        val result = userService.isUserExists(userId)
+        val result = assertThrows<EntityNotFoundException> {userService.isUserExists(userId)}
 
         //then
         then(userRepository).should().findById(userId)
 
-        assertThat(result.exist).isFalse()
+        assertThat(result.message).isEqualTo("User not found [id = $userId]")
     }
 
 }

@@ -16,6 +16,9 @@ class Order (
     @Column(nullable = false, name = "user_id")
     val userId: Long,
 
+    @Column(nullable = false, name = "user_name")
+    val userName: String,
+
     @Column(nullable = false, name = "order_no", unique = true, length = 32)
     val orderNo: String,
 
@@ -42,11 +45,13 @@ class Order (
     companion object{
         fun create(
             userId: Long,
+            userName: String,
             orderNo: String,
             timeProvider: TimeProvider
         ): Order{
             return Order(
                 userId = userId,
+                userName = userName,
                 orderNo = orderNo,
                 status = CREATED,
                 createdAt = timeProvider.now(),
@@ -56,10 +61,11 @@ class Order (
 
         fun fixture(
             userId: Long = 1L,
+            userName: String = "박하나",
             orderNo: String = "2025080100000001",
             timeProvider: TimeProvider
         ): Order{
-            return Order(userId, orderNo, CREATED, timeProvider.now())
+            return Order(userId, userName, orderNo, CREATED, timeProvider.now())
         }
     }
 
@@ -93,7 +99,7 @@ class Order (
         this.price = totalPrice
     }
 
-    fun assignPaymentId(paymentId: Long) {
+    fun mappedPaymentId(paymentId: Long) {
         this.paymentId = paymentId
     }
 

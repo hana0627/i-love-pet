@@ -50,7 +50,7 @@ class UserControllerTest {
         }
             .andExpect { status { isCreated() }
                 jsonPath("$.userId", equalTo(userRegisterResponse.userId.toInt()))
-                jsonPath("$.name", equalTo(userRegisterResponse.name))
+                jsonPath("$.userName", equalTo(userRegisterResponse.userName))
                 jsonPath("$.email", equalTo(userRegisterResponse.email))
                 jsonPath("$.phoneNumber", equalTo(userRegisterResponse.phoneNumber))
             }
@@ -69,7 +69,7 @@ class UserControllerTest {
         mvc.get("/api/users/{userId}", userId)
             .andExpect { status { isOk() }
                 jsonPath("$.userId", equalTo(userProfileResponse.userId.toInt()))
-                jsonPath("$.name", equalTo(userProfileResponse.name))
+                jsonPath("$.userName", equalTo(userProfileResponse.userName))
                 jsonPath("$.email", equalTo(userProfileResponse.email))
                 jsonPath("$.phoneNumber", equalTo(userProfileResponse.phoneNumber))
             }
@@ -98,15 +98,17 @@ class UserControllerTest {
     @Test
     fun `회원존재여부를 확인한다 유저가 있는경우`() {
         //given
-        val userExistResponse = UserExistResponse(exist = true)
         val userId = 1L
+        val userName = "박하나"
+        val userExistResponse = UserExistResponse(userId = userId, userName = userName)
 
         given(userService.isUserExists(userId)).willReturn(userExistResponse)
 
         //when & then
         mvc.get("/api/users/{userId}/exists", userId)
             .andExpect { status { isOk() }
-                jsonPath("$.exist", equalTo(true))
+                jsonPath("$.userId", equalTo(userId.toInt()))
+                jsonPath("$.userName", equalTo(userName))
             }
             .andDo { print() }
 
@@ -116,15 +118,15 @@ class UserControllerTest {
     @Test
     fun `회원존재여부를 확인한다 유저가 없는경우`() {
         //given
-        val userExistResponse = UserExistResponse(exist = false)
         val userId = 9999L
+        val userName = "없는유저"
 
-        given(userService.isUserExists(userId)).willReturn(userExistResponse)
+        given(userService.isUserExists(userId)).willThrow(EntityNotFoundException("User not found [id = $userId]"))
 
         //when & then
-        mvc.get("/api/users/{userId}/exiss", userId)
-            .andExpect { status { isOk() }
-                jsonPath("$.exist", equalTo(false))
+        mvc.get("/api/users/{userId}/exists", userId)
+            .andExpect { status { isNotFound() }
+                jsonPath("$.message", equalTo("User not found [id = $userId]"))
             }
             .andDo { print() }
 

@@ -1,8 +1,8 @@
 package hana.lovepet.orderservice.api.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import hana.lovepet.orderservice.api.controller.dto.request.OrderCreateRequest
-import hana.lovepet.orderservice.api.controller.dto.request.OrderItemRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderItemRequest
 import hana.lovepet.orderservice.api.controller.dto.response.OrderCreateResponse
 import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.exception.RestControllerHandler
@@ -34,7 +34,7 @@ class OrderControllerTest {
         val userId = 1L
         val items = getItems()
         val method = "카드"
-        val request = OrderCreateRequest(userId, method, items)
+        val request = CreateOrderRequest(userId, method, items)
 
         val json = om.writeValueAsString(request)
 
@@ -56,7 +56,7 @@ class OrderControllerTest {
         val userId = 1L
         val items = getItems()
         val method = "카드"
-        val request = OrderCreateRequest(userId, method, items)
+        val request = CreateOrderRequest(userId, method, items)
 
         val json = om.writeValueAsString(request)
 
@@ -75,13 +75,13 @@ class OrderControllerTest {
     }
 
 
-    private fun getItems(): List<OrderItemRequest> {
+    private fun getItems(): List<CreateOrderItemRequest> {
         return listOf(
-            OrderItemRequest(1L, 30000L, 1),
-            OrderItemRequest(2L, 35000L, 1),
-            OrderItemRequest(3L, 40000L, 5),
-            OrderItemRequest(4L, 55000L, 7),
-            OrderItemRequest(5L, 30000L, 10)
+            CreateOrderItemRequest(1L, "로얄캐닌 고양이 사료", 30000L, 1),
+            CreateOrderItemRequest(2L, "로얄캐닌 고양이 사료 키튼", 35000L, 1),
+            CreateOrderItemRequest(3L, "로얄캐닌 고양이 사료 인도어", 40000L, 5),
+            CreateOrderItemRequest(4L, "챠오츄르 마구로", 55000L, 7),
+            CreateOrderItemRequest(5L, "챠오츄르 이카", 30000L, 10),
         )
     }
 }

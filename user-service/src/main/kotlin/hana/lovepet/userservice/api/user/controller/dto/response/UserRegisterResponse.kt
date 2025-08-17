@@ -4,7 +4,7 @@ import hana.lovepet.userservice.api.user.controller.dto.request.UserRegisterRequ
 
 data class UserRegisterResponse (
     val userId: Long,
-    val name: String,
+    val userName: String,
     val email: String,
     val phoneNumber: String,
 ){
@@ -12,7 +12,7 @@ data class UserRegisterResponse (
         fun fixture(userRegisterRequest: UserRegisterRequest): UserRegisterResponse {
             return UserRegisterResponse(
                 userId = 1L,
-                name = userRegisterRequest.name,
+                userName = userRegisterRequest.userName,
                 email = userRegisterRequest.email,
                 phoneNumber = userRegisterRequest.phoneNumber,
             )

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
-import org.springframework.context.MessageSource
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -68,7 +67,7 @@ class ProductControllerTest {
         mvc.get("/api/products/$productId", productId)
             .andExpect {
                 status { isOk() }
-                jsonPath("$.name") { value(response.name) }
+                jsonPath("$.productName") { value(response.productName) }
                 jsonPath("$.price") { value(response.price) }
                 jsonPath("$.stock") { value(response.stock) }
             }.andDo { print() }
@@ -95,12 +94,12 @@ class ProductControllerTest {
         val response = listOf(
             ProductInformationResponse.fixture(),
             ProductInformationResponse.fixture(
-                name = "로얄캐닌 고양이 사료 키튼",
+                productName = "로얄캐닌 고양이 사료 키튼",
                 price = 38000L,
                 stock = 500,
             ),
             ProductInformationResponse.fixture(
-                name = "로얄캐닌 고양이 사료 인도어",
+                productName = "로얄캐닌 고양이 사료 인도어",
                 price = 37000L,
                 stock = 500,
             )
@@ -113,7 +112,7 @@ class ProductControllerTest {
             .andExpect {
                 status { isOk() }
                 jsonPath("$.size()") { value(response.size) }
-                jsonPath("$[0].name") { value(response[0].name) }
+                jsonPath("$[0].productName") { value(response[0].productName) }
                 jsonPath("$[1].price") { value(response[1].price) }
                 jsonPath("$[2].stock") { value(response[2].stock) }
             }
@@ -125,12 +124,12 @@ class ProductControllerTest {
         val response = listOf(
             ProductInformationResponse.fixture(),
             ProductInformationResponse.fixture(
-                name = "로얄캐닌 고양이 사료 키튼",
+                productName = "로얄캐닌 고양이 사료 키튼",
                 price = 38000L,
                 stock = 500,
             ),
             ProductInformationResponse.fixture(
-                name = "로얄캐닌 고양이 사료 인도어",
+                productName = "로얄캐닌 고양이 사료 인도어",
                 price = 37000L,
                 stock = 500,
             )
@@ -145,7 +144,7 @@ class ProductControllerTest {
         }
             .andExpect {
                 status { isOk() }
-                jsonPath("$[0].name") { value(response[0].name) }
+                jsonPath("$[0].productName") { value(response[0].productName) }
                 jsonPath("$[1].price") { value(response[1].price) }
                 jsonPath("$[2].stock") { value(response[2].stock) }
             }

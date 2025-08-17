@@ -3,10 +3,11 @@ package hana.lovepet.paymentservice.api.payment.controller.dto
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCreateResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -31,8 +32,14 @@ class PaymentController(
      * 결제정보 조회
      */
     @GetMapping("/{paymentId}")
-    fun getPayment(@PathVariable("paymentId") paymentId: Long): ResponseEntity<PaymentResponse> {
+    fun getPayment(@PathVariable("paymentId") paymentId: Long): ResponseEntity<GetPaymentResponse> {
         val response = paymentService.getPayment(paymentId)
+        return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/{paymentId}/logs")
+    fun getPaymentLogs(@PathVariable("paymentId") paymentId: Long): ResponseEntity<List<GetPaymentLogResponse>> {
+        val response = paymentService.getPaymentLogs(paymentId)
         return ResponseEntity.ok(response)
     }
 

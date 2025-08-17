@@ -3,13 +3,14 @@ package hana.lovepet.paymentservice.api.payment.service.impl
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCreateResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 import hana.lovepet.paymentservice.api.payment.domain.Payment
 import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
-import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
+import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus.*
 import hana.lovepet.paymentservice.api.payment.repository.PaymentLogRepository
 import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
@@ -23,11 +24,12 @@ import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-//@Transactional
+@Transactional(readOnly = true)
 class PaymentServiceImpl(
     private val paymentRepository: PaymentRepository,
     private val paymentLogRepository: PaymentLogRepository,
@@ -61,10 +63,12 @@ class PaymentServiceImpl(
             amount = payment.amount,
             method = payment.method
         )
-        paymentLogRepository.save(PaymentLog.request(
-            paymentId = payment.id!!,
-            message = "create information : 'orderId = ${payment.orderId}'"
-        ))
+        paymentLogRepository.save(
+            PaymentLog.request(
+                paymentId = payment.id!!,
+                message = "create information : 'orderId = ${payment.orderId}'"
+            )
+        )
 
 
         // 4. PG 요청
@@ -81,10 +85,12 @@ class PaymentServiceImpl(
                 failReason = "PG 통신 실패",
             )
 
-            paymentLogRepository.save(PaymentLog.error(
-                paymentId = payment.id!!,
-                message = "create error: reason ='${e.message}'"
-            ))
+            paymentLogRepository.save(
+                PaymentLog.error(
+                    paymentId = payment.id!!,
+                    message = "create error: reason ='${e.message}'"
+                )
+            )
             paymentRepository.save(payment)
 
             throw e
@@ -96,20 +102,24 @@ class PaymentServiceImpl(
             payment.approve(timeProvider, pgResponse.paymentKey)
 
             // 6. PG 응답 로그 저장
-            paymentLogRepository.save(PaymentLog.response(
-                paymentId = payment.id!!,
-                message = "create response : Success, 'paymentKey : ${pgResponse.paymentKey}!'",
-            ))
+            paymentLogRepository.save(
+                PaymentLog.response(
+                    paymentId = payment.id!!,
+                    message = "create response : Success, 'paymentKey : ${pgResponse.paymentKey}!'",
+                )
+            )
         }
         if (pgResponse is PgApproveResponse.Fail) {
             isSuccess = false
             payment.fail(timeProvider, pgResponse.paymentKey, pgResponse.message)
 
             // 6. PG 응답 로그 저장
-            paymentLogRepository.save(PaymentLog.response(
-                paymentId = payment.id!!,
-                message = "create response : FAIL reason ='${pgResponse.message}', ",
-            ))
+            paymentLogRepository.save(
+                PaymentLog.response(
+                    paymentId = payment.id!!,
+                    message = "create response : FAIL reason ='${pgResponse.message}', ",
+                )
+            )
         }
 
 
@@ -124,10 +134,68 @@ class PaymentServiceImpl(
         )
     }
 
-    @Transactional(readOnly = true)
-    override fun getPayment(paymentId: Long): PaymentResponse {
-        TODO("Not yet implemented")
+    override fun getPayment(paymentId: Long): GetPaymentResponse {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
 
+        return when (payment.status) {
+            PENDING -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.requestedAt,
+                description = payment.description ?: "",
+            )
+
+            SUCCESS -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.approvedAt!!,
+                description = payment.description ?: "",
+            )
+
+            FAIL -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.failedAt!!,
+                description = payment.failReason ?: "",
+            )
+
+            CANCELED -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.canceledAt!!,
+                description = payment.description ?: "",
+            )
+
+            REFUNDED -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.refundedAt!!,
+                description = payment.description ?: "",
+            )
+        }
+    }
+
+    override fun getPaymentLogs(paymentId: Long): List<GetPaymentLogResponse> {
+        val logs = paymentLogRepository
+            .findAllByPaymentIdOrderByIdDesc(paymentId, PageRequest.of(0, 20))
+        return logs.map {
+            GetPaymentLogResponse(
+                logType = it.logType,
+                message = it.message,
+                createdAt = it.createdAt,
+            )
+        }
     }
 
     @Transactional(noRollbackFor = [PgCommunicationException::class])
@@ -136,7 +204,7 @@ class PaymentServiceImpl(
             .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
 
         // STEP1. 멱등 처리 -- 이미 취소된 건이면 성공요청으로 반환
-        if (payment.status == PaymentStatus.CANCELED) {
+        if (payment.status == CANCELED) {
             return PaymentCancelResponse(
                 paymentId = payment.id!!,
                 canceledAt = payment.canceledAt!!,
@@ -146,19 +214,23 @@ class PaymentServiceImpl(
         }
 
         // STEP2. PG 결제취소 요청
-        paymentLogRepository.save(PaymentLog.request(
-            paymentId = payment.id!!,
-            message = "cancel request: reason='${paymentCancelRequest.refundReason}'"
-            ))
+        paymentLogRepository.save(
+            PaymentLog.request(
+                paymentId = payment.id!!,
+                message = "cancel request: reason='${paymentCancelRequest.refundReason}'"
+            )
+        )
         val pgCancelResponse: PgCancelResponse = try {
             pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason)
         } catch (e: PgCommunicationException) {
             // PG사 통신실패시
             log.error("PG사 통신실패 수동 처리 필요 ")
-            paymentLogRepository.save(PaymentLog.error(
-                paymentId = payment.id!!,
-                message = "cancel error: reason ='${e.message}'"
-            ))
+            paymentLogRepository.save(
+                PaymentLog.error(
+                    paymentId = payment.id!!,
+                    message = "cancel error: reason ='${e.message}'"
+                )
+            )
             throw e
         }
 
@@ -168,10 +240,12 @@ class PaymentServiceImpl(
                 // STEP3. 결제 취소상태로 변경
                 payment.cancel(timeProvider = timeProvider, description = paymentCancelRequest.refundReason)
                 // STEP4. 로그 저장
-                paymentLogRepository.save(PaymentLog.response(
-                    paymentId = payment.id!!,
-                    message = "cancel success: transactionKey='${pgCancelResponse.transactionKey}'"
-                ))
+                paymentLogRepository.save(
+                    PaymentLog.response(
+                        paymentId = payment.id!!,
+                        message = "cancel success: transactionKey='${pgCancelResponse.transactionKey}'"
+                    )
+                )
                 paymentRepository.save(payment)
 
                 return PaymentCancelResponse(
@@ -181,11 +255,14 @@ class PaymentServiceImpl(
                     message = "성공적으로 취소 되었습니다."
                 )
             }
+
             is PgCancelResponse.Fail -> {
-                paymentLogRepository.save(PaymentLog.response(
-                    paymentId = payment.id!!,
-                    message = "cancel fail: 'idempotent: already canceled'"
-                ))
+                paymentLogRepository.save(
+                    PaymentLog.response(
+                        paymentId = payment.id!!,
+                        message = "cancel fail: 'idempotent: already canceled'"
+                    )
+                )
                 return PaymentCancelResponse(
                     paymentId = payment.id!!,
                     message = pgCancelResponse.message
@@ -194,7 +271,9 @@ class PaymentServiceImpl(
         }
     }
 
+
     override fun refundPayment(paymentId: Long, paymentRefundRequest: PaymentRefundRequest): PaymentRefundResponse {
         TODO("Not yet implemented")
     }
+
 }

@@ -1,7 +1,10 @@
 package hana.lovepet.orderservice.api.service.impl
 
-import hana.lovepet.orderservice.api.controller.dto.request.OrderCreateRequest
-import hana.lovepet.orderservice.api.controller.dto.request.OrderItemRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderRequest
+import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderItemRequest
+import hana.lovepet.orderservice.api.controller.dto.request.OrderSearchCondition
+import hana.lovepet.orderservice.api.controller.dto.response.GetOrderItemsResponse
+import hana.lovepet.orderservice.api.controller.dto.response.GetOrdersResponse
 import hana.lovepet.orderservice.api.controller.dto.response.OrderCreateResponse
 import hana.lovepet.orderservice.api.domain.Order
 import hana.lovepet.orderservice.api.domain.OrderItem
@@ -19,8 +22,11 @@ import hana.lovepet.orderservice.infrastructure.webClient.product.ProductService
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -48,24 +54,24 @@ class OrderServiceImpl(
      *     product-service와의 불필요한 coupling 또는 보상 트랜잭션 설계가 필요해짐
      */
     @Transactional(noRollbackFor = [ApplicationException::class])
-    override fun createOrder(orderCreateRequest: OrderCreateRequest): OrderCreateResponse {
+    override fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse {
 
         // STEP1. 유저 검증
-        validateUser(orderCreateRequest)
+        val user = validateUser(createOrderRequest)
 
         // STEP2. Order 엔티티 생성 및 저장
-        val savedOrder = createAndSaveOrder(orderCreateRequest)
+        val savedOrder = createAndSaveOrder(createOrderRequest, user.userName)
 
         try {
             // STEP3. 상품 정보 조회
-            val productIds: List<Long> = orderCreateRequest.items.map { it.productId }
+            val productIds: List<Long> = createOrderRequest.items.map { it.productId }
             val productsInfos: List<ProductInformationResponse> = productServiceClient.getProducts(productIds)
 
             // STEP4. OrderItem 엔티티 생성
-            val orderItems = createOrderItems(savedOrder.id!!, orderCreateRequest.items)
+            val orderItems = createOrderItems(savedOrder.id!!, createOrderRequest.items)
 
             // STEP5. 상품정보검증
-            validateProductInfo(orderCreateRequest.items, productsInfos)
+            validateProductInfo(createOrderRequest.items, productsInfos)
 
             // STEP6. 총 결제금액 계산
             val totalPrice = orderItems.sumOf { it.price * it.quantity }
@@ -75,8 +81,12 @@ class OrderServiceImpl(
 
             // STEP8. 페이먼트 연동
             try {
-                val response = approvePayment(orderCreateRequest, savedOrder, totalPrice)
-                savedOrder.assignPaymentId(response.paymentId)
+                val response = approvePayment(createOrderRequest, savedOrder, totalPrice)
+
+                savedOrder.mappedPaymentId(response.paymentId)
+                if (!response.isSuccess) {
+                    throw ApplicationException(PAYMENTS_FAIL, response.failReason ?: "결제가 승인되지 않았습니다.")
+                }
             } catch (e: ApplicationException) {
                 // 결제 실패
                 log.info("결제 실패 orderId : {}, error : {}", savedOrder.id, e.getMessage)
@@ -85,7 +95,7 @@ class OrderServiceImpl(
 
             // STEP9. 재고감소
             try {
-                decreaseStock(orderCreateRequest.items)
+                decreaseStock(createOrderRequest.items)
             } catch (e: ApplicationException) {
                 // 재고차감 실패
                 log.info("재고 차감 실패 : ${e.getMessage}")
@@ -112,10 +122,40 @@ class OrderServiceImpl(
         return OrderCreateResponse(savedOrder.id!!)
     }
 
-    private fun createOrderItems(orderId: Long, items: List<OrderItemRequest>): List<OrderItem> {
+    override fun getOrders(
+        orderSearchCondition: OrderSearchCondition,
+        pageable: Pageable,
+    ): Page<GetOrdersResponse> {
+        return orderRepository.searchOrders(orderSearchCondition, pageable)
+    }
+
+    override fun getOrderItems(orderNo: String): List<GetOrderItemsResponse> {
+        val foundOrder = orderRepository.findByOrderNo(orderNo) ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+        val orderItems = orderItemRepository.findAllByOrderId(foundOrder.id!!)
+
+
+        val calculatedTotal = orderItems.sumOf { it.price * it.quantity }
+        if (foundOrder.price != calculatedTotal) {
+            log.warn("order의 총액과 orderItem 총액이 다릅니다.")
+        }
+
+        return orderItems.map {
+            GetOrderItemsResponse(
+                productId = it.productId,
+                productName = it.productName,
+                quantity = it.quantity,
+                unitPrice = it.price,
+                lineTotal = it.price * it.quantity
+            )
+        }
+    }
+
+
+    private fun createOrderItems(orderId: Long, items: List<CreateOrderItemRequest>): List<OrderItem> {
         val orderItems = items.map {
             OrderItem(
                 productId = it.productId,
+                productName = it.productName,
                 quantity = it.quantity,
                 price = it.price,
                 orderId = orderId,
@@ -127,7 +167,7 @@ class OrderServiceImpl(
 
     }
 
-    private fun createAndSaveOrder(orderCreateRequest: OrderCreateRequest): Order {
+    private fun createAndSaveOrder(createOrderRequest: CreateOrderRequest, userName: String): Order {
         // 주문번호 생성
         val todayString = timeProvider.todayString()
         // TODO Redis 사용
@@ -135,27 +175,27 @@ class OrderServiceImpl(
         val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
         val orderNo = todayString + "%07d".format(nextSeq)
 
-        val order = Order.create(orderCreateRequest.userId, orderNo, timeProvider)
+        val order = Order.create(createOrderRequest.userId, userName, orderNo, timeProvider)
         val savedOrder = orderRepository.save(order)
         return savedOrder
     }
 
-    private fun validateUser(orderCreateRequest: OrderCreateRequest) {
-        userServiceClient.getUser(orderCreateRequest.userId)
+    private fun validateUser(createOrderRequest: CreateOrderRequest): UserExistResponse {
+        return userServiceClient.getUser(createOrderRequest.userId)
     }
 
     private fun validateProductInfo(
-        orderItemRequests: List<OrderItemRequest>,
+        createOrderItemRequests: List<CreateOrderItemRequest>,
         productsInfos: List<ProductInformationResponse>,
     ) {
-        val requestedIds = orderItemRequests.map { it.productId }
+        val requestedIds = createOrderItemRequests.map { it.productId }
         val foundIds = productsInfos.map { it.productId }
         val missing = requestedIds - foundIds
         if (missing.isNotEmpty()) {
             throw ApplicationException(PRODUCT_NOT_FOUND, "존재하지 않는 상품 productId: $missing")
         }
 
-        orderItemRequests.forEach { req ->
+        createOrderItemRequests.forEach { req ->
             // .first -> 조건에 일치하는 첫번째 요소
             val stock = productsInfos.first { it.productId == req.productId }.stock
             if (stock < req.quantity) {
@@ -166,30 +206,33 @@ class OrderServiceImpl(
 
 
     private fun approvePayment(
-        orderCreateRequest: OrderCreateRequest,
+        createOrderRequest: CreateOrderRequest,
         savedOrder: Order,
         totalPrice: Long,
     ): PaymentCreateResponse{
-        val paymentRequest = PaymentCreateRequest(
-            userId = orderCreateRequest.userId,
+
+        return paymentServiceClient.approve(PaymentCreateRequest(
+            userId = createOrderRequest.userId,
             orderId = savedOrder.id!!,
             amount = totalPrice,
-            method = orderCreateRequest.method
-        )
-
-        val paymentResponse = paymentServiceClient.approve(paymentRequest)
-//        if(!paymentResponse.isSuccess){
+            method = createOrderRequest.method
+        ))
+//        val paymentRequest = PaymentCreateRequest(
+//            userId = createOrderRequest.userId,
+//            orderId = savedOrder.id!!,
+//            amount = totalPrice,
+//            method = createOrderRequest.method
+//        )
+//
+//        val paymentResponse = paymentServiceClient.approve(paymentRequest)
+//        if (paymentResponse.isSuccess) {
+//            return paymentResponse
+//        } else {
 //            throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
 //        }
-        if (paymentResponse.isSuccess) {
-            return paymentResponse
-        } else {
-            throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
-        }
-
     }
 
-    private fun decreaseStock(products: List<OrderItemRequest>) {
+    private fun decreaseStock(products: List<CreateOrderItemRequest>) {
         val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
         productServiceClient.decreaseStock(productStockDecreaseRequests)
     }

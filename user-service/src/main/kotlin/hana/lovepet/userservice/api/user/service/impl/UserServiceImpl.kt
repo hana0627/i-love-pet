@@ -12,7 +12,6 @@ import hana.lovepet.userservice.common.clock.TimeProvider
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.util.*
 
 @Service
 @Transactional(readOnly = true)
@@ -24,7 +23,7 @@ class UserServiceImpl(
     @Transactional
     override fun registerUser(userRegisterRequest: UserRegisterRequest): UserRegisterResponse {
         val user = User(
-            name = userRegisterRequest.name,
+            name = userRegisterRequest.userName,
             email = userRegisterRequest.email,
             phoneNumber = userRegisterRequest.phoneNumber,
             createdAt = timeProvider.now()
@@ -34,7 +33,7 @@ class UserServiceImpl(
 
         return UserRegisterResponse(
             userId = savedUser.id!!,
-            name = savedUser.name,
+            userName = savedUser.name,
             email = savedUser.email,
             phoneNumber = savedUser.phoneNumber,
             )
@@ -44,15 +43,19 @@ class UserServiceImpl(
         val user = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found [id = $userId]") }
         return UserProfileResponse(
             userId = user.id!!,
-            name = user.name,
+            userName = user.name,
             email = user.email,
             phoneNumber = user.phoneNumber,
         )
     }
 
-    override fun isUserExists(id: Long): UserExistResponse {
-        val user: Optional<User> = userRepository.findById(id)
-        return UserExistResponse(exist = user.isPresent)
+    override fun isUserExists(userId: Long): UserExistResponse {
+        val user: User = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found [id = $userId]") }
+
+        return UserExistResponse(
+            userId = user.id!!,
+            userName = user.name,
+        )
     }
 
     override fun getAllUsers(): List<AllUserResponse> {
@@ -60,7 +63,7 @@ class UserServiceImpl(
         return users.map {
             AllUserResponse(
                 userId = it.id!!,
-                name = it.name,
+                userName = it.name,
                 email = it.email,
                 phoneNumber = it.phoneNumber,
             )

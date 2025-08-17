@@ -71,7 +71,7 @@ class ProductServiceTest {
         //then
         then(productRepository).should().findById(productId)
 
-        assertThat(result.name).isEqualTo(product.name)
+        assertThat(result.productName).isEqualTo(product.name)
         assertThat(result.price).isEqualTo(product.price)
         assertThat(result.stock).isEqualTo(product.stock)
     }
@@ -115,7 +115,7 @@ class ProductServiceTest {
         val responses = products.map {
             ProductInformationResponse(
                 productId = it.id!!,
-                name = it.name,
+                productName = it.name,
                 price = it.price,
                 stock = it.stock,
             )
@@ -161,7 +161,7 @@ class ProductServiceTest {
 
         //then
         assertThat(result.size).isEqualTo(products.size)
-        assertThat(result[0].name).isEqualTo(product1.name)
+        assertThat(result[0].productName).isEqualTo(product1.name)
         assertThat(result[1].price).isEqualTo(product2.price)
         assertThat(result[2].stock).isEqualTo(product3.stock)
 

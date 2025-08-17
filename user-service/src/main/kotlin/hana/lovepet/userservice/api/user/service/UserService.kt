@@ -9,6 +9,6 @@ import hana.lovepet.userservice.api.user.controller.dto.response.UserProfileResp
 interface UserService {
     fun registerUser(userRegisterRequest: UserRegisterRequest): UserRegisterResponse
     fun getUserProfile(userId: Long): UserProfileResponse
-    fun isUserExists(id: Long): UserExistResponse
+    fun isUserExists(userId: Long): UserExistResponse
     fun getAllUsers(): List<AllUserResponse>
 }
