@@ -73,3 +73,52 @@ a { color:inherit; }
     box-shadow: 0 0 0 3px rgba(100,116,139,.2);
 }
 
+.toss-btn {
+    height: 48px;
+    width: 100%;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: 0;
+    cursor: pointer;
+}
+.toss-btn.primary {
+    background: #0064FF;   /* Toss Blue */
+    color: #fff;
+}
+.toss-btn.primary:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}
+/*.toss-btn.ghost {*/
+/*    background: #EEF2FF;*/
+/*    color: #334155;*/
+/*}*/
+
+.toss-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+
+    width: 32px;
+    height: 32px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #64748B;       /* slate-500 */
+    font-size: 20px;
+    cursor: pointer;
+
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.toss-close:hover {
+    background: rgba(0,0,0,0.05); /* 은은한 hover 배경 */
+    color: #334155;               /* slate-700 */
+}
+
