@@ -1,9 +1,11 @@
 package hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response
 
+import java.time.LocalDateTime
+
 data class PaymentCancelResponse (
     val paymentId: Long,
-    val paymentKey: String,
-    val isSuccess: Boolean = true,
-    val failReason: String? = null
+    val canceledAt: LocalDateTime? = null,
+    val transactionKey: String? = null,
+    val message: String? = null
 ){
 }

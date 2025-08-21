@@ -1,7 +1,7 @@
 package hana.lovepet.paymentservice.api.payment.service
 
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.domain.Payment
 import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
 import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
@@ -11,10 +11,10 @@ import hana.lovepet.paymentservice.api.payment.service.impl.PaymentServiceImpl
 import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.PgCommunicationException
 import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
-import hana.lovepet.paymentservice.infrastructure.webclient.payment.PgClient
+import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.PgApproveRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgApproveResponse
-import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
+import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.TossPaymentCancelResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -46,13 +46,13 @@ class PaymentServiceTest {
     lateinit var uuidGenerator: UUIDGenerator
 
     @Mock
-    lateinit var pgClient: PgClient
+    lateinit var tossClient: TossClient
     lateinit var paymentService: PaymentService
 
     @BeforeEach
     fun setUp() {
         paymentService =
-            PaymentServiceImpl(paymentRepository, paymentLogRepository, timeProvider, uuidGenerator, pgClient)
+            PaymentServiceImpl(paymentRepository, paymentLogRepository, timeProvider, uuidGenerator, tossClient)
     }
 
     @Test
@@ -61,7 +61,7 @@ class PaymentServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
         given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
-        val request = PaymentCreateRequest.fixture()
+        val request = PreparePaymentRequest.fixture()
 
         val payment = Payment(
             userId = request.userId,
@@ -98,15 +98,15 @@ class PaymentServiceTest {
             savedLog
         }
 
-        given(pgClient.approve(pgRequest)).willReturn(pgSuccessResponse)
+        given(tossClient.approve(pgRequest)).willReturn(pgSuccessResponse)
 
         //when
-        val result = paymentService.createPayment(request)
+        val result = paymentService.preparePayment(request)
 
         //then
         then(paymentRepository).should(times(2)).save(any())
         then(paymentLogRepository).should(times(2)).save(any())
-        then(pgClient).should().approve(pgRequest)
+        then(tossClient).should().approve(pgRequest)
 
         assertThat(result.paymentKey).isEqualTo("pg-success-key")
         assertThat(result.paymentId).isEqualTo(payment.id)
@@ -120,7 +120,7 @@ class PaymentServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
         given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
-        val request = PaymentCreateRequest.fixture()
+        val request = PreparePaymentRequest.fixture()
 
         val payment = Payment(
             userId = request.userId,
@@ -158,15 +158,15 @@ class PaymentServiceTest {
             savedLog
         }
 
-        given(pgClient.approve(pgRequest)).willReturn(pgFailResponse)
+        given(tossClient.approve(pgRequest)).willReturn(pgFailResponse)
 
         //when
-        val result = paymentService.createPayment(request)
+        val result = paymentService.preparePayment(request)
 
         //then
         then(paymentRepository).should(times(2)).save(any())
         then(paymentLogRepository).should(times(2)).save(any())
-        then(pgClient).should().approve(pgRequest)
+        then(tossClient).should().approve(pgRequest)
 
         assertThat(result.paymentKey).isEqualTo("pg-fail-key")
         assertThat(result.paymentId).isEqualTo(payment.id)
@@ -180,7 +180,7 @@ class PaymentServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
         given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
-        val request = PaymentCreateRequest.fixture()
+        val request = PreparePaymentRequest.fixture()
 
         given(paymentRepository.save(any())).willAnswer {
             val saved = it.arguments[0] as Payment
@@ -201,15 +201,15 @@ class PaymentServiceTest {
             method = request.method
         )
 
-        given(pgClient.approve(pgRequest)).willThrow(PgCommunicationException("PG 통신 실패"))
+        given(tossClient.approve(pgRequest)).willThrow(PgCommunicationException("PG 통신 실패"))
 
         //when
-        val result = assertThrows<PgCommunicationException> {paymentService.createPayment(request)}
+        val result = assertThrows<PgCommunicationException> {paymentService.preparePayment(request)}
 
         //then
         then(paymentRepository).should(times(2)).save(any())
         then(paymentLogRepository).should(times(2)).save(any())
-        then(pgClient).should().approve(pgRequest)
+        then(tossClient).should().approve(pgRequest)
 
         assertThat(result.message).isEqualTo("PG 통신 실패")
 
@@ -220,7 +220,7 @@ class PaymentServiceTest {
         given(timeProvider.now()).willReturn(LocalDateTime.of(2025, 8, 3, 9, 0, 0))
         given(uuidGenerator.generate()).willReturn("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
-        val request = PaymentCreateRequest.fixture()
+        val request = PreparePaymentRequest.fixture()
 
         given(paymentRepository.save(any())).willAnswer {
             val saved = it.arguments[0] as Payment
@@ -241,15 +241,15 @@ class PaymentServiceTest {
             method = request.method
         )
 
-        given(pgClient.approve(pgRequest)).willThrow(PgCommunicationException(null,null))
+        given(tossClient.approve(pgRequest)).willThrow(PgCommunicationException(null,null))
 
         //when
-        val result = assertThrows<PgCommunicationException> {paymentService.createPayment(request)}
+        val result = assertThrows<PgCommunicationException> {paymentService.preparePayment(request)}
 
         //then
         then(paymentRepository).should(times(2)).save(any())
         then(paymentLogRepository).should(times(2)).save(any())
-        then(pgClient).should().approve(pgRequest)
+        then(tossClient).should().approve(pgRequest)
 
         assertThat(result).isInstanceOf(PgCommunicationException::class.java)
     }
@@ -276,12 +276,12 @@ class PaymentServiceTest {
 
         given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
 
-        val paCancelResponse = PgCancelResponse.success(
+        val paCancelResponse = TossPaymentCancelResponse.success(
             paymentKey = payment.paymentKey,
             transactionKey = "transactionKey",
             cancelAt = timeProvider.now()
         )
-        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
+        given(tossClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
             .willReturn(paCancelResponse)
 
         //when
@@ -350,12 +350,12 @@ class PaymentServiceTest {
 
         given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
 
-        val paCancelResponse = PgCancelResponse.fail(
+        val paCancelResponse = TossPaymentCancelResponse.fail(
             paymentKey = payment.paymentKey,
             code = "ALREADY_CANCELED_PAYMENT",
             message = "이미 취소된 결제 입니다."
         )
-        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
+        given(tossClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason))
             .willReturn(paCancelResponse)
 
         //when
@@ -389,12 +389,12 @@ class PaymentServiceTest {
 
         given(paymentRepository.findById(paymentId)).willReturn(Optional.of(payment))
 
-        val paCancelResponse = PgCancelResponse.fail(
+        val paCancelResponse = TossPaymentCancelResponse.fail(
             paymentKey = payment.paymentKey,
             code = "ALREADY_CANCELED_PAYMENT",
             message = "이미 취소된 결제 입니다."
         )
-        given(pgClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason)).willThrow(PgCommunicationException("PG사의 응답이 없습니다."))
+        given(tossClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason)).willThrow(PgCommunicationException("PG사의 응답이 없습니다."))
 
         //when
         val result = assertThrows<PgCommunicationException> {paymentService.cancelPayment(paymentId, paymentCancelRequest)}

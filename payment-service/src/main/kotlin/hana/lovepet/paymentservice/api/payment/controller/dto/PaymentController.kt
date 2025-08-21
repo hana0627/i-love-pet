@@ -1,11 +1,14 @@
 package hana.lovepet.paymentservice.api.payment.controller.dto
 
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.ConfirmPaymentRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.FailPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.ConfirmPaymentResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCreateResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
@@ -23,10 +26,46 @@ class PaymentController(
      * 결제 진행
      */
     @PostMapping
-    fun createPayment(@RequestBody paymentCreateRequest: PaymentCreateRequest): ResponseEntity<PaymentCreateResponse> {
-        val response = paymentService.createPayment(paymentCreateRequest)
+    fun preparePayment(@RequestBody preparePaymentRequest: PreparePaymentRequest): ResponseEntity<PreparePaymentResponse> {
+        println("PaymentController.preparePayment")
+        val response = paymentService.preparePayment(preparePaymentRequest)
+        println("response = ${response}")
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
+
+    @PatchMapping("/{paymentId}/confirm")
+    fun confirmPayment(
+        @PathVariable("paymentId") paymentId: Long,
+        @RequestBody confirmPaymentRequest: ConfirmPaymentRequest): ResponseEntity<ConfirmPaymentResponse> {
+        println("PaymentController.confirmPayment")
+        val response = paymentService.confirmPayment(paymentId, confirmPaymentRequest)
+        println("response = ${response}")
+        return ResponseEntity.status(HttpStatus.CREATED).body(response)
+    }
+
+    /**
+     * 결제 취소
+     */
+    @PatchMapping("/{paymentId}/cancel")
+    fun cancelPayment(@PathVariable("paymentId") paymentId: Long, @RequestBody paymentCancelRequest: PaymentCancelRequest): ResponseEntity<PaymentCancelResponse> {
+        println("PaymentController.cancelPayment")
+        val response = paymentService.cancelPayment(paymentId, paymentCancelRequest)
+        println("response = ${response}")
+        return ResponseEntity.ok(response)
+    }
+
+
+    @PatchMapping("/{paymentId}/fail")
+    fun failPayment(
+        @PathVariable("paymentId") paymentId: Long,
+        @RequestBody failPaymentRequest: FailPaymentRequest
+    ): ResponseEntity<Boolean> {
+        println("PaymentController.failPayment")
+        val response = paymentService.failPayment(paymentId, failPaymentRequest)
+        println("PaymentController.failPayment")
+        return ResponseEntity.status(HttpStatus.OK).body(response)
+    }
+
 
     /**
      * 결제정보 조회
@@ -40,15 +79,6 @@ class PaymentController(
     @GetMapping("/{paymentId}/logs")
     fun getPaymentLogs(@PathVariable("paymentId") paymentId: Long): ResponseEntity<List<GetPaymentLogResponse>> {
         val response = paymentService.getPaymentLogs(paymentId)
-        return ResponseEntity.ok(response)
-    }
-
-    /**
-     * 결제 취소
-     */
-    @PatchMapping("/{paymentId}/cancel")
-    fun cancelPayment(@PathVariable("paymentId") paymentId: Long, @RequestBody paymentCancelRequest: PaymentCancelRequest): ResponseEntity<PaymentCancelResponse> {
-        val response = paymentService.cancelPayment(paymentId, paymentCancelRequest)
         return ResponseEntity.ok(response)
     }
 

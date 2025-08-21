@@ -79,6 +79,17 @@ class ProductServiceImpl(
 
         val products = productRepository.findAllById(ids)
 
+
+        // TODO 삭제
+        // -- 예외상황 검증 추가 - start
+        products.forEach { it ->
+            if(it.name.contains("재고부족")) {
+                throw IllegalStateException("재고가 부족합니다.")
+            }
+        }
+
+        // -- 예외상황 검증 추가 - end
+
         val productMap = products.associateBy { it.id }
 
         productStockDecreaseRequests.forEach {

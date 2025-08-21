@@ -3,11 +3,10 @@ package hana.lovepet.paymentservice.api.payment.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import hana.lovepet.paymentservice.api.payment.controller.dto.PaymentController
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCreateRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCreateResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
-import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.PgCommunicationException
 import hana.lovepet.paymentservice.common.exception.RestControllerHandler
 import org.junit.jupiter.api.Test
@@ -39,15 +38,15 @@ class PaymentControllerTest {
     @Test
     fun `결제가 성공적으로 이루어진다`() {
         //given
-        val paymentCreateRequest = PaymentCreateRequest.fixture()
-        val json = om.writeValueAsString(paymentCreateRequest)
+        val preparePaymentRequest = PreparePaymentRequest.fixture()
+        val json = om.writeValueAsString(preparePaymentRequest)
 
-        val response = PaymentCreateResponse(
+        val response = PreparePaymentResponse(
             paymentId = 1L,
             paymentKey = "test-success-payment-key",
         )
 
-        given(paymentService.createPayment(paymentCreateRequest)).willReturn(response)
+        given(paymentService.preparePayment(preparePaymentRequest)).willReturn(response)
 
         //when & then
         mvc.post("/api/payments") {
@@ -65,11 +64,11 @@ class PaymentControllerTest {
     @Test
     fun `결제 실패시 예외가 발샐한다`() {
         //given
-        val paymentCreateRequest = PaymentCreateRequest.fixture()
-        val json = om.writeValueAsString(paymentCreateRequest)
+        val preparePaymentRequest = PreparePaymentRequest.fixture()
+        val json = om.writeValueAsString(preparePaymentRequest)
 
 
-        given(paymentService.createPayment(paymentCreateRequest)).willThrow(PgCommunicationException("PG 통신 실패"))
+        given(paymentService.preparePayment(preparePaymentRequest)).willThrow(PgCommunicationException("PG 통신 실패"))
 
         //when & then
         mvc.post("/api/payments") {

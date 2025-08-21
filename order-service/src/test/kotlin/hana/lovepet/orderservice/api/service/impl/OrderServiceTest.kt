@@ -12,8 +12,8 @@ import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PreparePaymentRequest
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PreparePaymentResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
@@ -95,9 +95,9 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", true)
-        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        val preparePaymentResponse = PreparePaymentResponse(1000L, "success-payment-key", true)
+        given(paymentServiceClient.approve(preparePaymentRequest)).willReturn(preparePaymentResponse)
 
         //when
         val result = orderService.createOrder(createOrderRequest)
@@ -108,7 +108,7 @@ class OrderServiceTest {
         then(orderRepository).should(times(2)).save(any())
 //        then(orderRepository).should(times(3)).save(any())
         then(productServiceClient).should().getProducts(ids)
-        then(paymentServiceClient).should().approve(paymentCreateRequest)
+        then(paymentServiceClient).should().approve(preparePaymentRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
 
         assertThat(result.orderId).isEqualTo(order.id)
@@ -147,9 +147,9 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", true)
-        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        val preparePaymentResponse = PreparePaymentResponse(1000L, "success-payment-key", true)
+        given(paymentServiceClient.approve(preparePaymentRequest)).willReturn(preparePaymentResponse)
 
         //when
         val result = orderService.createOrder(createOrderRequest)
@@ -160,7 +160,7 @@ class OrderServiceTest {
         then(orderRepository).should(times(2)).save(any())
 //        then(orderRepository).should(times(3)).save(any())
         then(productServiceClient).should().getProducts(ids)
-        then(paymentServiceClient).should().approve(paymentCreateRequest)
+        then(paymentServiceClient).should().approve(preparePaymentRequest)
         then(orderItemRepository).should().saveAll(listOf(any()))
 
         assertThat(result.orderId).isEqualTo(order.id)
@@ -324,8 +324,8 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        given(paymentServiceClient.approve(paymentCreateRequest)).willThrow(
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        given(paymentServiceClient.approve(preparePaymentRequest)).willThrow(
             ApplicationException(
                 ErrorCode.PAYMENTS_FAIL,
                 "주문 결제 중 오류 발생: PG 통신 실패"
@@ -367,16 +367,16 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key", false, "잔액 부족")
-        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        val preparePaymentResponse = PreparePaymentResponse(1000L, "success-payment-key", false, "잔액 부족")
+        given(paymentServiceClient.approve(preparePaymentRequest)).willReturn(preparePaymentResponse)
 
         //when
         val result = assertThrows<RuntimeException> { orderService.createOrder(createOrderRequest) }
 
         //then
         assertThat(order.status).isEqualTo(OrderStatus.FAIL)
-        assertThat(result.message).isEqualTo("결제 실패: ${paymentCreateResponse.failReason}")
+        assertThat(result.message).isEqualTo("결제 실패: ${preparePaymentResponse.failReason}")
     }
 
     @Test
@@ -406,9 +406,9 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
-        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        val preparePaymentResponse = PreparePaymentResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(preparePaymentRequest)).willReturn(preparePaymentResponse)
 
         given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
 
@@ -449,9 +449,9 @@ class OrderServiceTest {
         given(productServiceClient.getProducts(ids)).willReturn(productsInfo)
         val totalPrice = items.sumOf { it.price * it.quantity }
 
-        val paymentCreateRequest = PaymentCreateRequest(userId, order.id!!, totalPrice, method)
-        val paymentCreateResponse = PaymentCreateResponse(1000L, "success-payment-key")
-        given(paymentServiceClient.approve(paymentCreateRequest)).willReturn(paymentCreateResponse)
+        val preparePaymentRequest = PreparePaymentRequest(userId, order.id!!, totalPrice, method)
+        val preparePaymentResponse = PreparePaymentResponse(1000L, "success-payment-key")
+        given(paymentServiceClient.approve(preparePaymentRequest)).willReturn(preparePaymentResponse)
 
         given(productServiceClient.decreaseStock(anyList())).willThrow(ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION))
         given(paymentServiceClient.cancel(order.paymentId, PaymentCancelRequest("상품 재고 차감 실패"))).willThrow(

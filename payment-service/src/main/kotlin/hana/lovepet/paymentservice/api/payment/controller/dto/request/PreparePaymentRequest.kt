@@ -1,6 +1,6 @@
 package hana.lovepet.paymentservice.api.payment.controller.dto.request
 
-data class PaymentCreateRequest(
+data class PreparePaymentRequest(
     val userId: Long,
     val orderId: Long,
     val amount: Long,
@@ -13,8 +13,8 @@ data class PaymentCreateRequest(
             orderId: Long = 1000L,
             amount: Long = 5000L,
             method: String? = "카드"
-        ): PaymentCreateRequest {
-            return PaymentCreateRequest(
+        ): PreparePaymentRequest {
+            return PreparePaymentRequest(
                 userId = userId,
                 orderId = orderId,
                 amount = amount,

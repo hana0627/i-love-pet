@@ -3,11 +3,15 @@ package hana.lovepet.orderservice.api.service.impl
 import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderRequest
 import hana.lovepet.orderservice.api.controller.dto.request.CreateOrderItemRequest
 import hana.lovepet.orderservice.api.controller.dto.request.OrderSearchCondition
+import hana.lovepet.orderservice.api.controller.dto.request.ConfirmOrderRequest
+import hana.lovepet.orderservice.api.controller.dto.request.FailOrderRequest
 import hana.lovepet.orderservice.api.controller.dto.response.GetOrderItemsResponse
 import hana.lovepet.orderservice.api.controller.dto.response.GetOrdersResponse
-import hana.lovepet.orderservice.api.controller.dto.response.OrderCreateResponse
+import hana.lovepet.orderservice.api.controller.dto.response.ConfirmOrderResponse
+import hana.lovepet.orderservice.api.controller.dto.response.PrepareOrderResponse
 import hana.lovepet.orderservice.api.domain.Order
 import hana.lovepet.orderservice.api.domain.OrderItem
+import hana.lovepet.orderservice.api.domain.constant.OrderStatus
 import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
@@ -15,9 +19,11 @@ import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode.*
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.ConfirmPaymentRequest
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.FailPaymentRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCreateRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PaymentCreateResponse
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PreparePaymentRequest
+import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PreparePaymentResponse
 import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
@@ -29,6 +35,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -43,83 +50,161 @@ class OrderServiceImpl(
     val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
 
     /**
-     * 1. 상품 정보는 먼저 조회하여 재고 및 가격 등의 유효성만 검증
-     * 2. 결제가 최종 승인된 이후에만 상품 재고를 차감
-     *
-     * "비가역 작업(재고 차감)은 가장 마지막에 배치"하여
-     *    - 결제 실패 시 불필요한 보상 트랜잭션을 방지하고
-     *    - 장애 복구 및 상태 정합성을 유지할 수 있도록 설계함
-     *
-     * 재고 차감이 앞단에 위치하면 결제 실패 시 롤백이 어려워지고,
-     *     product-service와의 불필요한 coupling 또는 보상 트랜잭션 설계가 필요해짐
+     * 결제 준비
      */
-    @Transactional(noRollbackFor = [ApplicationException::class])
-    override fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse {
-
-        // STEP1. 유저 검증
+    @Transactional
+    override fun prepareOrder(createOrderRequest: CreateOrderRequest): PrepareOrderResponse {
+        // 1. 유저 검증
         val user = validateUser(createOrderRequest)
 
-        // STEP2. Order 엔티티 생성 및 저장
-        val savedOrder = createAndSaveOrder(createOrderRequest, user.userName)
+        // 2. 주문 엔티티 생성(상태: PENDING_PAYMENT) + 저장
+        val order = createAndSaveOrder(createOrderRequest, user.userName) // createdAt, orderNo 생성 등
 
-        try {
-            // STEP3. 상품 정보 조회
-            val productIds: List<Long> = createOrderRequest.items.map { it.productId }
-            val productsInfos: List<ProductInformationResponse> = productServiceClient.getProducts(productIds)
+        // 3. 상품 정보 조회 & OrderItem 스냅샷 생성
+        val productIds = createOrderRequest.items.map { it.productId }
+        val productInfos = productServiceClient.getProducts(productIds)
+        validateProductInfo(createOrderRequest.items, productInfos)
 
-            // STEP4. OrderItem 엔티티 생성
-            val orderItems = createOrderItems(savedOrder.id!!, createOrderRequest.items)
+        val orderItems = createOrderItems(order.id!!, createOrderRequest.items)
 
-            // STEP5. 상품정보검증
-            validateProductInfo(createOrderRequest.items, productsInfos)
+        // 4. 총액 계산 & 주문에 반영(아직 결제 전)
+        val total = orderItems.sumOf { it.price * it.quantity }
+        order.updateTotalPrice(total)
 
-            // STEP6. 총 결제금액 계산
-            val totalPrice = orderItems.sumOf { it.price * it.quantity }
+        // 5. 결제정보 저장
+        val preparePaymentResponse = paymentServiceClient.prepare(
+            PreparePaymentRequest(
+                userId = user.userId,
+                orderId = order.id!!,
+                amount = total,
+                method = createOrderRequest.method,
+            )
+        )
 
-            // STEP7. Order 엔티티에 총 주문금액 저장
-            savedOrder.updateTotalPrice(totalPrice)
+        order.mappedPaymentId(preparePaymentResponse.paymentId)
 
-            // STEP8. 페이먼트 연동
-            try {
-                val response = approvePayment(createOrderRequest, savedOrder, totalPrice)
+        orderRepository.save(order)
 
-                savedOrder.mappedPaymentId(response.paymentId)
-                if (!response.isSuccess) {
-                    throw ApplicationException(PAYMENTS_FAIL, response.failReason ?: "결제가 승인되지 않았습니다.")
-                }
-            } catch (e: ApplicationException) {
-                // 결제 실패
-                log.info("결제 실패 orderId : {}, error : {}", savedOrder.id, e.getMessage)
-                throw ApplicationException(PAYMENTS_FAIL, e.getMessage)
-            }
+        return PrepareOrderResponse(
+            orderId = order.orderNo,
+            amount = total
+        )
+    }
 
-            // STEP9. 재고감소
-            try {
-                decreaseStock(createOrderRequest.items)
-            } catch (e: ApplicationException) {
-                // 재고차감 실패
-                log.info("재고 차감 실패 : ${e.getMessage}")
-                try {
-                    paymentServiceClient.cancel(paymentId = savedOrder.paymentId, PaymentCancelRequest(refundReason = "상품 재고 차감 실패"))
-                } catch (e: ApplicationException) {
-                    log.error("결제 취소 실패(수동 보상 필요) orderId=${savedOrder.id}, reason=${e.getMessage}")
-                    throw ApplicationException(e.errorCode, e.getMessage)
-                }
-                throw ApplicationException(STOCK_DECREASE_FAIL, e.getMessage)
-            }
 
-            // STEP10. 주문 확정
-            savedOrder.confirm(timeProvider)
+    @Transactional(noRollbackFor = [ApplicationException::class])
+    override fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse {
+        // 1. 주문 찾기 & 상태검증
+        val order = orderRepository.findByOrderNo(confirmOrderResponse.orderId)
+            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
 
-        } catch (e: ApplicationException) {
-            savedOrder.fail(timeProvider)
-            orderRepository.save(savedOrder)
-            throw ApplicationException(e.errorCode, e.getMessage)
+        // 이미 결제완료 되었으면 멱등 처리
+        if (order.status == OrderStatus.CONFIRMED) {
+            log.info("멱등처리. 이미 결제 완료된 주문 : order = $order")
+            return ConfirmOrderResponse(
+                success = true,
+                orderNo = order.orderNo,
+                paymentId = order.paymentId,
+                message = "이미 결제 완료된 주문입니다."
+            )
+        }
+        if (order.status != OrderStatus.CREATED) {
+            return ConfirmOrderResponse(
+                success = false,
+                orderNo = order.orderNo,
+                message = "결제 가능한 상태가 아닙니다. [status=${order.status}]"
+            )
         }
 
-        orderRepository.save(savedOrder)
+        if (order.price != confirmOrderResponse.amount) {
+            log.error("결제 금액 불일치: expected=${order.price}, actual=${confirmOrderResponse.amount}, paymentConfirmResponse = $order")
+            return ConfirmOrderResponse(
+                success = false,
+                orderNo = order.orderNo,
+                message = "결제 금액 불일치: expected=${order.price}, actual=${confirmOrderResponse.amount}"
+            )
+        }
 
-        return OrderCreateResponse(savedOrder.id!!)
+        // 결제 확정
+        try {
+            paymentServiceClient.confirm(
+                ConfirmPaymentRequest(
+                    orderId = order.id!!,
+                    orderNo = order.orderNo,
+                    paymentId = order.paymentId,
+                    paymentKey = confirmOrderResponse.paymentKey,
+                    amount = confirmOrderResponse.amount,
+                )
+            )
+        } catch (e: ApplicationException) {
+            order.fail(timeProvider)
+            orderRepository.save(order)
+            log.error("paymentService 통신 중 오류발생 - paymentId=${order.paymentId}, error=${e.message}")
+            return ConfirmOrderResponse(
+                success = false,
+                orderNo = order.orderNo,
+                message = "결제서비스 통신 오류: ${e.message}"
+            )
+        }
+
+
+        // 3) 재고 차감 (부분 실패 시 여기서 예외 발생 가정)
+        try {
+            val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
+            decreaseStock(orderItems)
+        } catch (e: ApplicationException) {
+            log.error("재고차감실패! paymentId=${order.paymentId}, error=${e.message}")
+            // 4) 보상 트랜잭션: 결제 취소 시도
+            try {
+                paymentServiceClient.cancel(
+                    paymentId = order.paymentId,
+                    paymentCancelRequest = PaymentCancelRequest(refundReason = "재고 차감 실패: ${e.message}")
+                )
+            } catch (cancelException: ApplicationException) {
+                log.error("결제 취소 실패(수동 보상 필요) orderId=${order.id}, reason=${cancelException.getMessage}")
+                throw ApplicationException(cancelException.errorCode, cancelException.getMessage)
+            }
+
+            order.fail(timeProvider)
+            orderRepository.save(order)
+            return ConfirmOrderResponse(
+                success = false,
+                orderNo = order.orderNo,
+                message = "재고 차감 실패로 결제 취소됨"
+            )
+        }
+
+        // 5) 최종 주문 확정
+        order.confirm(timeProvider)
+        orderRepository.save(order)
+
+        return ConfirmOrderResponse(
+            success = true,
+            orderNo = order.orderNo,
+            paymentId = order.paymentId,
+            message = "결제/주문 확정 완료"
+        )
+    }
+
+    @Transactional
+    override fun failOrder(failOrderRequest: FailOrderRequest): Boolean {
+        // 1. 주문 찾기 & 상태검증
+        val order = orderRepository.findByOrderNo(failOrderRequest.orderId)
+            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+
+        // 2. 주문상태변경
+        order.fail(timeProvider)
+
+        paymentServiceClient.fail(
+            FailPaymentRequest(
+                orderId = order.id!!,
+                paymentId = order.paymentId,
+                message = failOrderRequest.message,
+                code = failOrderRequest.code
+            )
+        )
+
+        return true
     }
 
     override fun getOrders(
@@ -130,7 +215,10 @@ class OrderServiceImpl(
     }
 
     override fun getOrderItems(orderNo: String): List<GetOrderItemsResponse> {
-        val foundOrder = orderRepository.findByOrderNo(orderNo) ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+        val foundOrder = orderRepository.findByOrderNo(orderNo) ?: throw ApplicationException(
+            ORDER_NOT_FOUND,
+            ORDER_NOT_FOUND.message
+        )
         val orderItems = orderItemRepository.findAllByOrderId(foundOrder.id!!)
 
 
@@ -149,7 +237,6 @@ class OrderServiceImpl(
             )
         }
     }
-
 
     private fun createOrderItems(orderId: Long, items: List<CreateOrderItemRequest>): List<OrderItem> {
         val orderItems = items.map {
@@ -174,6 +261,8 @@ class OrderServiceImpl(
         val maxOrderNo = orderRepository.findMaxOrderNoByToday("$todayString%")
         val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
         val orderNo = todayString + "%07d".format(nextSeq)
+//        val orderNo = UUID.randomUUID().toString().substring(10)
+//        println("orderNo = ${orderNo}")
 
         val order = Order.create(createOrderRequest.userId, userName, orderNo, timeProvider)
         val savedOrder = orderRepository.save(order)
@@ -209,14 +298,16 @@ class OrderServiceImpl(
         createOrderRequest: CreateOrderRequest,
         savedOrder: Order,
         totalPrice: Long,
-    ): PaymentCreateResponse{
+    ): PreparePaymentResponse {
 
-        return paymentServiceClient.approve(PaymentCreateRequest(
-            userId = createOrderRequest.userId,
-            orderId = savedOrder.id!!,
-            amount = totalPrice,
-            method = createOrderRequest.method
-        ))
+        return paymentServiceClient.approve(
+            PreparePaymentRequest(
+                userId = createOrderRequest.userId,
+                orderId = savedOrder.id!!,
+                amount = totalPrice,
+                method = createOrderRequest.method
+            )
+        )
 //        val paymentRequest = PaymentCreateRequest(
 //            userId = createOrderRequest.userId,
 //            orderId = savedOrder.id!!,
@@ -232,7 +323,7 @@ class OrderServiceImpl(
 //        }
     }
 
-    private fun decreaseStock(products: List<CreateOrderItemRequest>) {
+    private fun decreaseStock(products: List<OrderItem>) {
         val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
         productServiceClient.decreaseStock(productStockDecreaseRequests)
     }
