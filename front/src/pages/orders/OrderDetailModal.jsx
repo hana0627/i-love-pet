@@ -10,7 +10,7 @@ function OrderDetailModal({ open, detail, onClose, statusPill, isLoadingPayment,
 
   if (!open || !detail) return null;
 
-  const { order, payment, paymentLogs,  items: items } = detail;
+  const { order, payment, paymentLogs, items: items } = detail;
 
   return (
     <div
@@ -57,7 +57,7 @@ function OrderDetailModal({ open, detail, onClose, statusPill, isLoadingPayment,
                       <tr><td>상태</td><td>{payment?.status ?? '-'}</td></tr>
                       <tr><td>금액</td><td>{payment?.amount?.toLocaleString?.() ?? '-'}</td></tr>
                       <tr><td>방식</td><td>{payment?.method ?? '-'}</td></tr>
-                      <tr><td>일시</td><td>{new Date(payment.occurredAt).toLocaleString()}</td></tr>
+                      {/*<tr><td>일시</td><td>{new Date(payment.occurredAt).toLocaleString()}</td></tr>*/}
                       <tr><td>비고</td><td>{payment?.description ?? '-'}</td></tr>
                     </>
                   )

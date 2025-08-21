@@ -8,6 +8,7 @@ import ProductCreate from "./pages/products/ProductCreate";
 import ProductList from "./pages/products/ProductList";
 import OrderCreate from "./pages/orders/OrderCreate";
 import OrderList from "./pages/orders/OrderList";
+import PaymentSuccess from "./pages/orders/PaymentSuccess";
 
 function App() {
   return (
@@ -23,6 +24,9 @@ function App() {
 
         <Route path="/orders/create" element={<OrderCreate />} />
         <Route path="/orders/list" element={<OrderList />} />
+
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+
 
       </Routes>
     </BrowserRouter>

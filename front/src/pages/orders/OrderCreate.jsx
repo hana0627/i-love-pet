@@ -19,6 +19,7 @@ function OrderCreate() {
   const [openWidget, setOpenWidget] = useState(false);
 
   const renderedRef = useRef(false);
+  const [paymentMethod, setPaymentMethod] = useState(null);
   // 토스페이먼츠 - end
 
 
@@ -113,89 +114,106 @@ function OrderCreate() {
 
 
   // 토스페이먼츠 위젯 그리기
+  // 렌더 함수 수정
   async function renderPaymentWidgets() {
     if (!widgets || renderedRef.current) return;
-    await Promise.all([
-      // ------  결제 UI 렌더링 ------
-      widgets.renderPaymentMethods({
-        selector: "#payment-method",
-        variantKey: "DEFAULT",
-      }),
-      // ------  이용약관 UI 렌더링 ------
-      widgets.renderAgreement({
-        selector: "#agreement",
-        variantKey: "AGREEMENT",
-      }),
-    ]);
+
+    const paymentMethodWidget = await widgets.renderPaymentMethods({
+      selector: "#payment-method",
+      variantKey: "DEFAULT",
+    });
+
+    await widgets.renderAgreement({
+      selector: "#agreement",
+      variantKey: "AGREEMENT",
+    });
+
+    // 결제수단 선택 이벤트 구독
+    paymentMethodWidget.on('paymentMethodSelect', (event) => {
+      setPaymentMethod(event);
+    });
+
     setReady(true);
     renderedRef.current = true;
+
+    // 위젯이 완전히 로드된 후 초기 선택된 결제수단 확인
+    setTimeout(async () => {  // async 추가
+      try {
+        const initialSelectedMethod = await paymentMethodWidget.getSelectedPaymentMethod(); // await 추가
+        if (initialSelectedMethod && !paymentMethod) {
+          setPaymentMethod(initialSelectedMethod);
+        }
+      } catch (error) {
+        console.warn('초기 결제수단 정보를 가져오는데 실패했습니다:', error);
+      }
+    }, 500); // 위젯이 완전히 로드될 시간 확보
   }
   // 토스페이먼츠 - end
 
   // 토스페이먼츠 결제요청 - start
-  function requestPayments() {
+  async function requestPayments() {
+    // paymentMethod가 null이거나 undefined인 경우 처리
+    if (!paymentMethod) {
+      alert('결제수단이 선택되지 않았습니다. 결제수단을 선택해주세요.');
+      return;
+    }
 
-    // 여기서 서버호출
-    // 결제를 요청하기 전에 orderId, amount를 서버에 저장하세요.
-    // --> orderId 생성하기.
+    // paymentMethod 객체 구조에 따라 다르게 처리
+    let selectedMethod;
+    if (typeof paymentMethod === 'string') {
+      selectedMethod = paymentMethod;
+    } else if (paymentMethod.code) {
+      selectedMethod = paymentMethod.code;
+    } else if (paymentMethod.type) {
+      selectedMethod = paymentMethod.type;
+    } else {
+      console.error('결제수단 정보 구조를 파악할 수 없습니다:', paymentMethod);
+      selectedMethod = 'CARD';
+    }
 
-    // 아래는 기존에 Fake 결제를 위한 api
-    // try {
-    //   const res = await fetch("http://localhost:8082/api/orders", {
-    //     method: "POST",
-    //     headers: {"Content-Type": "application/json"},
-    //     body: JSON.stringify({
-    //         userId: Number(selectedUser),
-    //         items: selectedItems
-    //       }
-    //     ),
-    //   });
-    //
-    //   if (!res.ok) {
-    //     let msg = "주문 생성 실패";
-    //     try {
-    //       const err = await res.json();
-    //       if (err?.message) msg = err.message;
-    //     } catch {
-    //     }
-    //     alert(msg);
-    //     return;
-    //   }
-    //   const data = await res.json();
-    //   alert(`주문 생성 완료! 주문번호: ${data.orderId}`);
-    //   nav("/");
-    // } catch (e) {
-    //   alert("주문 생성 중 오류가 발생했습니다.");
-    // } finally {
-    //   setSubmitting(false);
-    // }
+    const res = await fetch("http://localhost:8082/api/orders/prepare", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        userId: Number(selectedUser),
+        items: selectedItems,
+        method: selectedMethod,
+      }),
+    });
 
+    if (!res.ok) {
+      alert(await res.text().catch(() => "주문 생성 실패"));
+      return;
+    }
 
-    widgets.requestPayment({
-      orderId: `demo_${Date.now()}`,
+    const { orderId, amount } = await res.json();
+    await widgets.setAmount({ currency: "KRW", value: amount });
+
+    await widgets.requestPayment({
+      orderId,
       orderName: selectedItems.length === 1
         ? selectedItems[0].productName
         : `${selectedItems[0].productName} 외 ${selectedItems.length - 1}건`,
-      successUrl: window.location.origin + "/success",
-      failUrl: window.location.origin + "/fail",
-    })
+      successUrl: window.location.origin + "/payment-success",
+      failUrl: window.location.origin + "/payment-fail",
+    });
   }
-
   // 토스페이먼츠 결제요청 - end
 
 
   async function createOrder() {
     if (submitting) return;
     setSubmitting(true);
+    try {
+      if (!selectedUser) return alert("사용자를 선택해주세요.");
+      if (selectedItems.length === 0) return alert("상품을 선택하고 수량을 입력해주세요.");
+      await widgets.setAmount({currency: "KRW", value: total});
 
-    if (!selectedUser) return alert("사용자를 선택해주세요.");
-    if (selectedItems.length === 0) return alert("상품을 선택하고 수량을 입력해주세요.");
-    await widgets.setAmount({currency: "KRW", value: total});
-
-    setOpenWidget(true)
-    await renderPaymentWidgets()
-
-    setSubmitting(false);
+      setOpenWidget(true)
+      await renderPaymentWidgets()
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
