@@ -77,7 +77,7 @@ class ProductServiceImpl(
     override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
         val ids = productStockDecreaseRequests.map {it.productId}
 
-        val products = productRepository.findAllById(ids)
+        val products = productRepository.findAllByIdWithLock(ids)
 
 
         // TODO 삭제
