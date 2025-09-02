@@ -1,20 +1,26 @@
-package hana.lovepet.paymentservice.api.payment.controller.dto
+package hana.lovepet.paymentservice.api.payment.controller
 
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.ConfirmPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.FailPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
+import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.ConfirmPaymentResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/payments")
@@ -25,18 +31,19 @@ class PaymentController(
     /**
      * 결제 진행
      */
-    @PostMapping
-    fun preparePayment(@RequestBody preparePaymentRequest: PreparePaymentRequest): ResponseEntity<PreparePaymentResponse> {
-        println("PaymentController.preparePayment")
-        val response = paymentService.preparePayment(preparePaymentRequest)
-        println("response = ${response}")
-        return ResponseEntity.status(HttpStatus.CREATED).body(response)
-    }
+//    @PostMapping
+//    fun preparePayment(@RequestBody preparePaymentRequest: PreparePaymentRequest): ResponseEntity<PreparePaymentResponse> {
+//        println("PaymentController.preparePayment")
+//        val response = paymentService.preparePayment(preparePaymentRequest)
+//        println("response = ${response}")
+//        return ResponseEntity.status(HttpStatus.CREATED).body(response)
+//    }
 
     @PatchMapping("/{paymentId}/confirm")
     fun confirmPayment(
         @PathVariable("paymentId") paymentId: Long,
-        @RequestBody confirmPaymentRequest: ConfirmPaymentRequest): ResponseEntity<ConfirmPaymentResponse> {
+        @RequestBody confirmPaymentRequest: ConfirmPaymentRequest
+    ): ResponseEntity<ConfirmPaymentResponse> {
         println("PaymentController.confirmPayment")
         val response = paymentService.confirmPayment(paymentId, confirmPaymentRequest)
         println("response = ${response}")
@@ -91,4 +98,3 @@ class PaymentController(
         return ResponseEntity.ok(response)
     }
 }
-
