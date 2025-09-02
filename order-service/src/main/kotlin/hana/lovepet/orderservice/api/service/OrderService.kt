@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable
 
 interface OrderService {
     fun prepareOrder(createOrderRequest: CreateOrderRequest): PrepareOrderResponse
+    fun mappedPaymentId(orderId: Long, paymentId: Long)
 //    fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse
     fun getOrders(orderSearchCondition: OrderSearchCondition, pageable: Pageable): Page<GetOrdersResponse>
     fun getOrderItems(orderNo: String): List<GetOrderItemsResponse>

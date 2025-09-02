@@ -18,6 +18,9 @@ import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode.*
+import hana.lovepet.orderservice.infrastructure.kafka.out.OrderEventPublisher
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.OrderCreateEvent
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.PaymentPrepareEvent
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.ConfirmPaymentRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.FailPaymentRequest
@@ -31,6 +34,7 @@ import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
@@ -46,6 +50,9 @@ class OrderServiceImpl(
     private val productServiceClient: ProductServiceClient,
     private val userServiceClient: UserServiceClient,
     private val paymentServiceClient: PaymentServiceClient,
+
+//    private val orderEventPublisher: OrderEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) : OrderService {
     val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
 
@@ -72,23 +79,34 @@ class OrderServiceImpl(
         order.updateTotalPrice(total)
 
         // 5. 결제정보 저장
-        val preparePaymentResponse = paymentServiceClient.prepare(
-            PreparePaymentRequest(
-                userId = user.userId,
+        applicationEventPublisher.publishEvent(
+            PaymentPrepareEvent(
+                eventId = UUID.randomUUID().toString(),
+                occurredAt = timeProvider.now().toString(),
                 orderId = order.id!!,
+                userId = user.userId,
                 amount = total,
                 method = createOrderRequest.method,
+                idempotencyKey = order.orderNo
             )
         )
-
-        order.mappedPaymentId(preparePaymentResponse.paymentId)
-
-        orderRepository.save(order)
 
         return PrepareOrderResponse(
             orderId = order.orderNo,
             amount = total
         )
+    }
+
+    @Transactional
+    override fun mappedPaymentId(orderId: Long, paymentId:Long) {
+        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        if(order.paymentId == null) {
+            order.mappedPaymentId(paymentId)
+            orderRepository.save(order)
+        }
+        else {
+            log.info("멱등처리. 이미 맵핑된 paymentId : order = $order")
+        }
     }
 
 
@@ -112,7 +130,7 @@ class OrderServiceImpl(
             return ConfirmOrderResponse(
                 success = false,
                 orderNo = order.orderNo,
-                message = "결제 가능한 상태가 아닙니다. [status=${order.status}]"
+                message = "결제가 가능한 상태가 아닙니다. [status=${order.status}]"
             )
         }
 
@@ -125,29 +143,6 @@ class OrderServiceImpl(
             )
         }
 
-        // 결제 확정
-        try {
-            paymentServiceClient.confirm(
-                ConfirmPaymentRequest(
-                    orderId = order.id!!,
-                    orderNo = order.orderNo,
-                    paymentId = order.paymentId,
-                    paymentKey = confirmOrderResponse.paymentKey,
-                    amount = confirmOrderResponse.amount,
-                )
-            )
-        } catch (e: ApplicationException) {
-            order.fail(timeProvider)
-            orderRepository.save(order)
-            log.error("paymentService 통신 중 오류발생 - paymentId=${order.paymentId}, error=${e.message}")
-            return ConfirmOrderResponse(
-                success = false,
-                orderNo = order.orderNo,
-                message = "결제서비스 통신 오류: ${e.message}"
-            )
-        }
-
-
         // 3) 재고 차감 (부분 실패 시 여기서 예외 발생 가정)
         try {
             val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
@@ -157,7 +152,7 @@ class OrderServiceImpl(
             // 4) 보상 트랜잭션: 결제 취소 시도
             try {
                 paymentServiceClient.cancel(
-                    paymentId = order.paymentId,
+                    paymentId = order.paymentId!!,
                     paymentCancelRequest = PaymentCancelRequest(refundReason = "재고 차감 실패: ${e.message}")
                 )
             } catch (cancelException: ApplicationException) {
@@ -171,6 +166,28 @@ class OrderServiceImpl(
                 success = false,
                 orderNo = order.orderNo,
                 message = "재고 차감 실패로 결제 취소됨"
+            )
+        }
+
+        // 결제 확정
+        try {
+            paymentServiceClient.confirm(
+                ConfirmPaymentRequest(
+                    orderId = order.id!!,
+                    orderNo = order.orderNo,
+                    paymentId = order.paymentId!!,
+                    paymentKey = confirmOrderResponse.paymentKey,
+                    amount = confirmOrderResponse.amount,
+                )
+            )
+        } catch (e: ApplicationException) {
+            order.fail(timeProvider)
+            orderRepository.save(order)
+            log.error("paymentService 통신 중 오류발생 - paymentId=${order.paymentId}, error=${e.message}")
+            return ConfirmOrderResponse(
+                success = false,
+                orderNo = order.orderNo,
+                message = "결제서비스 통신 오류: ${e.message}"
             )
         }
 
@@ -198,7 +215,7 @@ class OrderServiceImpl(
         paymentServiceClient.fail(
             FailPaymentRequest(
                 orderId = order.id!!,
-                paymentId = order.paymentId,
+                paymentId = order.paymentId!!,
                 message = failOrderRequest.message,
                 code = failOrderRequest.code
             )
@@ -308,29 +325,10 @@ class OrderServiceImpl(
                 method = createOrderRequest.method
             )
         )
-//        val paymentRequest = PaymentCreateRequest(
-//            userId = createOrderRequest.userId,
-//            orderId = savedOrder.id!!,
-//            amount = totalPrice,
-//            method = createOrderRequest.method
-//        )
-//
-//        val paymentResponse = paymentServiceClient.approve(paymentRequest)
-//        if (paymentResponse.isSuccess) {
-//            return paymentResponse
-//        } else {
-//            throw ApplicationException(PAYMENTS_FAIL, "결제 실패: ${paymentResponse.failReason}")
-//        }
     }
 
     private fun decreaseStock(products: List<OrderItem>) {
         val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
         productServiceClient.decreaseStock(productStockDecreaseRequests)
     }
-
-//    private fun cancelOrder(savedOrder: Order) {
-//        savedOrder.cancel(timeProvider)
-//        orderRepository.save(savedOrder)
-//    }
-
 }

@@ -36,7 +36,7 @@ class Order (
     var price: Long = 0
 
     @Column(name = "payment_id")
-    var paymentId: Long = 0
+    var paymentId: Long? = null
 
     @Column(nullable = true, name = "updated_at")
     var updatedAt: LocalDateTime? = null

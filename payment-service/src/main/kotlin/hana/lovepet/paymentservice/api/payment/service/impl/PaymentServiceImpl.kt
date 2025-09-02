@@ -20,12 +20,15 @@ import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.PgCommunicationException
 import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
+import hana.lovepet.paymentservice.infrastructure.kafka.out.PaymentEventPublisher
+import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentPreparedEvent
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentConfirmRequest
 //import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -38,22 +41,29 @@ class PaymentServiceImpl(
     private val timeProvider: TimeProvider,
     private val uuidGenerator: UUIDGenerator,
     private val tossClient: TossClient,
+
+//    private val paymentEventPublisher: PaymentEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher
 ) : PaymentService {
 
     private val log: Logger = LoggerFactory.getLogger(PaymentServiceImpl::class.java)
 
     @Transactional
-    override fun preparePayment(preparePaymentRequest: PreparePaymentRequest): PreparePaymentResponse {
+    override fun preparePayment(
+        userId: Long,
+        orderId: Long,
+        amount: Long,
+        method: String,
+    ): PreparePaymentResponse {
         // 1. 임시 Payment키 생성
         val tempPaymentKey = uuidGenerator.generate()
-
         // 2. Payment 초기 엔티티 생성
         val payment = Payment(
-            userId = preparePaymentRequest.userId,
-            orderId = preparePaymentRequest.orderId,
+            userId = userId,
+            orderId = orderId,
             paymentKey = tempPaymentKey,
-            amount = preparePaymentRequest.amount,
-            method = preparePaymentRequest.method,
+            amount = amount,
+            method = method,
             requestedAt = timeProvider.now()
         )
         paymentRepository.save(payment)
@@ -65,6 +75,27 @@ class PaymentServiceImpl(
                 message = "결제 요청 : orderId = ${payment.orderId}"
             )
         )
+
+
+        applicationEventPublisher.publishEvent(
+            PaymentPreparedEvent(
+                eventId = uuidGenerator.generate(),
+                occurredAt = payment.requestedAt,
+                orderId = payment.orderId,
+                paymentId = payment.id!!,
+                idempotencyKey = payment.paymentKey,
+            )
+        )
+//        paymentEventPublisher.publishPaymentPrepared(
+//            PaymentPreparedEvent(
+//                eventId = uuidGenerator.generate(),
+//                occurredAt = payment.requestedAt,
+//                orderId = payment.orderId,
+//                paymentId = payment.id!!,
+//                idempotencyKey = payment.paymentKey,
+//            )
+//        )
+
 
         return PreparePaymentResponse(
             paymentId = payment.id!!,

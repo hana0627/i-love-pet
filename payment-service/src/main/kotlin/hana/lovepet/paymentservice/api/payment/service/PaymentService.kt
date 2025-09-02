@@ -13,7 +13,7 @@ import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRe
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 
 interface PaymentService {
-    fun preparePayment(preparePaymentRequest: PreparePaymentRequest): PreparePaymentResponse
+    fun preparePayment(userId: Long, orderId: Long, amount: Long, method: String): PreparePaymentResponse
     fun confirmPayment(paymentId: Long, confirmPaymentRequest: ConfirmPaymentRequest): ConfirmPaymentResponse
     fun getPayment(paymentId: Long): GetPaymentResponse
     fun cancelPayment(paymentId: Long, paymentCancelRequest: PaymentCancelRequest): PaymentCancelResponse
