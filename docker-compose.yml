@@ -69,6 +69,94 @@ services:
       timeout: 5s
       retries: 10
 
+
+  zookeeper:
+    # confluent 이미지 사용
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper-1
+    environment:
+      # 컨테이너 내부에서 주키퍼를 리슨하는 포트
+      ZOOKEEPER_CLIENT_PORT: 2181
+      # 기본 시간단위. 세션/하트비트 등을 2초단위로 사용
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      # 스냅샷 데이터 영속화
+      - zk_data:/var/lib/zookeeper/data
+      # 트랜잭션 로그 영속화
+      - zk_txn:/var/lib/zookeeper/log
+
+  kafka:
+    # confluent 이미지 사용
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka-1
+    # 주키퍼가 실행되어야 사용
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+
+    # 각 환경변수가 의미하는 바는??
+    # 예제에서는 저정도로 설정 안하는것 같던데
+    environment:
+      # 브로커 ID. 클러스터 내 브로커 식별자(정수)
+      KAFKA_BROKER_ID: 1
+      # 브로커가 접속할 Zookeeper 주소
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # 내부/외부 리스너 설정 (도커 네트워크용/호스트용)
+
+      # 리스너 이름과 프로토콜 매핑, 실 운영이면 SSL 고려
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      # 브로커가 실제로 바인드 할 주소
+      # 내부 29092, 외부 9092
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092
+      # 외부에 내 주소가 무엇이다 라고 알려주는 주소
+      # 내부적으로는 29092, 외부로는 9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:29092,EXTERNAL://localhost:9092
+      # 어떤 내부망을 사용할 지 지정. 도커 내부망을 쓰는 경우 INTERNAL
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # 로그 데이터가 저장될 경로
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+      # 토픽 자동생성 금지
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # ISR이 아닌 브로커를 리더로 승격 금지
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+
+      # 단일 브로커라 replication_factor가 1개여야함
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+    volumes:
+      # 데이터 영속화
+      - kafka_data_1:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list > /dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # Kafka UI (웹 기반 관리 도구)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest             # Kafka UI 최신 이미지
+    container_name: kafka-ui                         # 컨테이너명 지정
+    restart: always                                  # 컨테이너 자동 재시작 정책
+    depends_on:
+      kafka:
+        condition: service_healthy                   # Kafka가 healthy 상태일 때만 시작
+    ports:
+      - "8090:8080"                                  # 웹 UI 접속 포트 (호스트:8090)
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local                   # UI에서 표시할 클러스터명
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092 # Kafka 브로커 연결 주소 (내부 네트워크)
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181    # Zookeeper 연결 주소
+
   user-service:
     build:
       context: ./user-service
@@ -76,6 +164,8 @@ services:
     container_name: user-service
     depends_on:
       user-mysql:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     ports:
       - "8080:8080"
@@ -92,6 +182,8 @@ services:
     depends_on:
       product-mysql:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     ports:
       - "8081:8080"
     environment:
@@ -106,6 +198,8 @@ services:
     container_name: order-service
     depends_on:
       order-mysql:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     ports:
       - "8082:8080"
@@ -122,6 +216,8 @@ services:
     depends_on:
       payment-mysql:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     ports:
       - "8083:8080"
     environment:
@@ -129,3 +225,9 @@ services:
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
 
+# 아래는 '이름 있는 볼륨' 정의.
+# 도커가 호스트 디스크에 실제 경로를 생성/관리하며, 컨테이너 생명주기와 분리된 영속 스토리지를 제공.
+volumes:
+  zk_data:
+  zk_txn:
+  kafka_data_1:
