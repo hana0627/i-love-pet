@@ -44,9 +44,7 @@ class PaymentController(
         @PathVariable("paymentId") paymentId: Long,
         @RequestBody confirmPaymentRequest: ConfirmPaymentRequest
     ): ResponseEntity<ConfirmPaymentResponse> {
-        println("PaymentController.confirmPayment")
         val response = paymentService.confirmPayment(paymentId, confirmPaymentRequest)
-        println("response = ${response}")
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
@@ -55,9 +53,7 @@ class PaymentController(
      */
     @PatchMapping("/{paymentId}/cancel")
     fun cancelPayment(@PathVariable("paymentId") paymentId: Long, @RequestBody paymentCancelRequest: PaymentCancelRequest): ResponseEntity<PaymentCancelResponse> {
-        println("PaymentController.cancelPayment")
         val response = paymentService.cancelPayment(paymentId, paymentCancelRequest)
-        println("response = ${response}")
         return ResponseEntity.ok(response)
     }
 
@@ -67,9 +63,7 @@ class PaymentController(
         @PathVariable("paymentId") paymentId: Long,
         @RequestBody failPaymentRequest: FailPaymentRequest
     ): ResponseEntity<Boolean> {
-        println("PaymentController.failPayment")
         val response = paymentService.failPayment(paymentId, failPaymentRequest)
-        println("PaymentController.failPayment")
         return ResponseEntity.status(HttpStatus.OK).body(response)
     }
 

@@ -8,6 +8,7 @@ import hana.lovepet.orderservice.api.controller.dto.request.FailOrderRequest
 import hana.lovepet.orderservice.api.controller.dto.response.GetOrderItemsResponse
 import hana.lovepet.orderservice.api.controller.dto.response.GetOrdersResponse
 import hana.lovepet.orderservice.api.controller.dto.response.ConfirmOrderResponse
+import hana.lovepet.orderservice.api.controller.dto.response.OrderStatusResponse
 import hana.lovepet.orderservice.api.controller.dto.response.PrepareOrderResponse
 import hana.lovepet.orderservice.api.domain.Order
 import hana.lovepet.orderservice.api.domain.OrderItem
@@ -18,8 +19,10 @@ import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.clock.TimeProvider
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode.*
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductsInformationResponseEvent.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.kafka.out.OrderEventPublisher
-import hana.lovepet.orderservice.infrastructure.kafka.out.dto.OrderCreateEvent
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.GetProductsEvent
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.GetProductsEvent.OrderItemRequest
 import hana.lovepet.orderservice.infrastructure.kafka.out.dto.PaymentPrepareEvent
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.ConfirmPaymentRequest
@@ -27,9 +30,8 @@ import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.Fa
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PreparePaymentRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PreparePaymentResponse
-import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
+//import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
 import org.slf4j.Logger
@@ -47,11 +49,11 @@ class OrderServiceImpl(
     private val orderRepository: OrderRepository,
     private val orderItemRepository: OrderItemRepository,
     private val timeProvider: TimeProvider,
-    private val productServiceClient: ProductServiceClient,
+//    private val productServiceClient: ProductServiceClient,
     private val userServiceClient: UserServiceClient,
     private val paymentServiceClient: PaymentServiceClient,
 
-//    private val orderEventPublisher: OrderEventPublisher,
+    private val orderEventPublisher: OrderEventPublisher,
     private val applicationEventPublisher: ApplicationEventPublisher,
 ) : OrderService {
     val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
@@ -65,35 +67,97 @@ class OrderServiceImpl(
         val user = validateUser(createOrderRequest)
 
         // 2. 주문 엔티티 생성(상태: PENDING_PAYMENT) + 저장
+        // ** OrderStatus - CREATED **
         val order = createAndSaveOrder(createOrderRequest, user.userName) // createdAt, orderNo 생성 등
 
         // 3. 상품 정보 조회 & OrderItem 스냅샷 생성
-        val productIds = createOrderRequest.items.map { it.productId }
-        val productInfos = productServiceClient.getProducts(productIds)
-        validateProductInfo(createOrderRequest.items, productInfos)
+        val getProductEventId = UUID.randomUUID().toString()
 
-        val orderItems = createOrderItems(order.id!!, createOrderRequest.items)
+//        orderEventPublisher.publishGetProductsInformation(
+//            GetProductsEvent(
+//                eventId = getProductEventId,
+//                orderId = order.id!!,
+//                items = createOrderRequest.items.map {
+//                    OrderItemRequest(
+//                        productId = it.productId,
+//                        quantity = it.quantity
+//                    )
+//                },
+//                idempotencyKey = order.orderNo
+//            )
+//        )
+        applicationEventPublisher.publishEvent(
+            GetProductsEvent(
+                eventId = getProductEventId,
+                orderId = order.id!!,
+                items = createOrderRequest.items.map {
+                    OrderItemRequest(
+                        productId = it.productId,
+                        quantity = it.quantity
+                    )
+                },
+                idempotencyKey = order.orderNo
+            )
+        )
 
-        // 4. 총액 계산 & 주문에 반영(아직 결제 전)
-        val total = orderItems.sumOf { it.price * it.quantity }
-        order.updateTotalPrice(total)
+        // ** OrderStatus - VALIDATING **
+        order.updateStatus(OrderStatus.VALIDATING, timeProvider)
 
-        // 5. 결제정보 저장
+
+        createAndSaveOrderItems(order.id!!, createOrderRequest.items)
+
+        // eventId를 통해 계속 polling할 예정
+        return PrepareOrderResponse(
+            orderId = order.orderNo,
+            eventId = getProductEventId,
+            amount = null,
+            status = order.status
+        )
+    }
+
+    @Transactional
+    override fun mappedTotalAmount(orderId: Long, products: List<ProductInformationResponse>) {
+
+        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
+
+        if (order.price != 0L) {
+            log.warn("이미 총액이 계산된 주문입니다. orderId=$orderId")
+            return
+        }
+        var total = 0L
+
+        try {
+            // 순수 검증 로직만 try-catch 안에
+            validateProductInfo(orderItems, products)
+            updateOrderItemPrices(orderItems, products)
+            total = orderItems.sumOf { it.price * it.quantity }
+            order.updateTotalPrice(total)
+
+        } catch (e: Exception) {
+            // 검증 실패 시에만 VALIDATION_FAILED
+            order.updateStatus(OrderStatus.VALIDATION_FAILED, timeProvider)
+            // TODO 메서드로 변경
+            order.description = e.message
+            orderRepository.save(order)
+            log.error("상품 검증 실패. orderId=$orderId, error=${e.message}", e)
+            return
+        }
+
+        order.updateStatus(OrderStatus.CONFIRMED, timeProvider)
+        orderRepository.save(order)
+        orderItemRepository.saveAll(orderItems)
+
         applicationEventPublisher.publishEvent(
             PaymentPrepareEvent(
                 eventId = UUID.randomUUID().toString(),
                 occurredAt = timeProvider.now().toString(),
                 orderId = order.id!!,
-                userId = user.userId,
+                userId = order.userId,
                 amount = total,
-                method = createOrderRequest.method,
+                method = order.paymentMethod,
                 idempotencyKey = order.orderNo
             )
-        )
-
-        return PrepareOrderResponse(
-            orderId = order.orderNo,
-            amount = total
         )
     }
 
@@ -106,6 +170,28 @@ class OrderServiceImpl(
         }
         else {
             log.info("멱등처리. 이미 맵핑된 paymentId : order = $order")
+        }
+    }
+
+    @Transactional(readOnly = true)
+    override fun getStatus(orderNo: String): OrderStatusResponse {
+        val order = orderRepository.findByOrderNo(orderNo)
+            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+
+
+        return when (order.status) {
+            OrderStatus.CONFIRMED -> OrderStatusResponse(
+                orderNo = order.orderNo,
+                status = order.status,
+                amount = order.price,
+                errorMessage = null,
+            )
+            else -> OrderStatusResponse(
+                orderNo = order.orderNo,
+                status = order.status,
+                amount = null,
+                errorMessage = order.description
+            )
         }
     }
 
@@ -224,6 +310,7 @@ class OrderServiceImpl(
         return true
     }
 
+
     override fun getOrders(
         orderSearchCondition: OrderSearchCondition,
         pageable: Pageable,
@@ -255,13 +342,13 @@ class OrderServiceImpl(
         }
     }
 
-    private fun createOrderItems(orderId: Long, items: List<CreateOrderItemRequest>): List<OrderItem> {
+    private fun createAndSaveOrderItems(orderId: Long, items: List<CreateOrderItemRequest>): List<OrderItem> {
         val orderItems = items.map {
             OrderItem(
                 productId = it.productId,
                 productName = it.productName,
                 quantity = it.quantity,
-                price = it.price,
+                price = 0,
                 orderId = orderId,
             )
         }
@@ -281,7 +368,7 @@ class OrderServiceImpl(
 //        val orderNo = UUID.randomUUID().toString().substring(10)
 //        println("orderNo = ${orderNo}")
 
-        val order = Order.create(createOrderRequest.userId, userName, orderNo, timeProvider)
+        val order = Order.create(createOrderRequest.userId, userName, orderNo, createOrderRequest.method, timeProvider)
         val savedOrder = orderRepository.save(order)
         return savedOrder
     }
@@ -291,44 +378,38 @@ class OrderServiceImpl(
     }
 
     private fun validateProductInfo(
-        createOrderItemRequests: List<CreateOrderItemRequest>,
-        productsInfos: List<ProductInformationResponse>,
+        orderItems: List<OrderItem>,
+        productInfos: List<ProductInformationResponse>,
     ) {
-        val requestedIds = createOrderItemRequests.map { it.productId }
-        val foundIds = productsInfos.map { it.productId }
-        val missing = requestedIds - foundIds
+        val requestedMap = orderItems.associateBy { it.productId }
+        val productMap = productInfos.associateBy { it.productId }
+
+        // 존재하지 않는 상품 체크
+        val missing = requestedMap.keys - productMap.keys
         if (missing.isNotEmpty()) {
             throw ApplicationException(PRODUCT_NOT_FOUND, "존재하지 않는 상품 productId: $missing")
         }
 
-        createOrderItemRequests.forEach { req ->
-            // .first -> 조건에 일치하는 첫번째 요소
-            val stock = productsInfos.first { it.productId == req.productId }.stock
-            if (stock < req.quantity) {
-                throw ApplicationException(NOT_ENOUGH_STOCK, "재고 부족 productId: ${req.productId}")
+        // 재고 부족 체크
+        requestedMap.forEach { (productId, orderItem) ->
+            val product = productMap[productId]!!
+            if (product.stock < orderItem.quantity) {
+                throw ApplicationException(NOT_ENOUGH_STOCK, "재고 부족 productId: $productId, 요청수량: ${orderItem.quantity}, 재고: ${product.stock}")
             }
         }
     }
 
+    private fun updateOrderItemPrices(orderItems: List<OrderItem>, products: List<ProductInformationResponse>) {
+        val productMap = products.associateBy { it.productId }
 
-    private fun approvePayment(
-        createOrderRequest: CreateOrderRequest,
-        savedOrder: Order,
-        totalPrice: Long,
-    ): PreparePaymentResponse {
-
-        return paymentServiceClient.approve(
-            PreparePaymentRequest(
-                userId = createOrderRequest.userId,
-                orderId = savedOrder.id!!,
-                amount = totalPrice,
-                method = createOrderRequest.method
-            )
-        )
+        orderItems.forEach { it ->
+            val product = productMap[it.productId]!!
+            it.updateProductNameAndPrice(product.productName, product.price)
+        }
     }
 
     private fun decreaseStock(products: List<OrderItem>) {
         val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
-        productServiceClient.decreaseStock(productStockDecreaseRequests)
+//        productServiceClient.decreaseStock(productStockDecreaseRequests)
     }
 }

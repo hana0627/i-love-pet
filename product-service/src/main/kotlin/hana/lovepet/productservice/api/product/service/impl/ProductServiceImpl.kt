@@ -9,15 +9,21 @@ import hana.lovepet.productservice.api.product.domain.Product
 import hana.lovepet.productservice.api.product.repository.ProductRepository
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.common.clock.TimeProvider
+import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.GetProductsEvent.OrderItemRequest
+import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductsInformationResponseEvent
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
 class ProductServiceImpl(
     private val productRepository: ProductRepository,
     private val timeProvider: TimeProvider,
+
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) : ProductService {
 
     @Transactional
@@ -54,24 +60,76 @@ class ProductServiceImpl(
         }
     }
 
-    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
+    @Transactional
+//    override fun getProductsInformation(orderId: Long, products: List<OrderItemRequest>): List<ProductInformationResponse> {
+    override fun getProductsInformation(orderId: Long, products: List<OrderItemRequest>) {
+        val ids = products.map { it -> it.productId }
+        val productQuantityMap = products.associateBy { it.productId } // 수량 매핑용
+
         val entities: List<Product> = productRepository.findAllById(ids)
         val foundIds = entities.map { it.id }.toSet()
         val missing = ids.filterNot { it in foundIds }
-        if (missing.isNotEmpty()) {
-            throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
+        try {
+            if (missing.isNotEmpty()) {
+                throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
+            }
+
+            val result = entities.map { entity ->
+                val orderItem = productQuantityMap[entity.id!!]!!
+                ProductsInformationResponseEvent.ProductInformationResponse(
+                    productId = entity.id!!,
+                    productName = entity.name,
+                    price = entity.price,
+                    stock = entity.stock,
+                    quantity = orderItem.quantity
+                )
+            }
+            // 성공이벤트 발행
+            applicationEventPublisher.publishEvent(
+                ProductsInformationResponseEvent(
+                    eventId = UUID.randomUUID().toString(),
+                    orderId = orderId,
+                    success = true,
+                    products = result,
+
+                    )
+            )
+
+        } catch(e: Exception) {
+            // 실패이벤트 발행
+            applicationEventPublisher.publishEvent(
+                ProductsInformationResponseEvent(
+                    eventId = UUID.randomUUID().toString(),
+                    orderId = orderId,
+                    success = false,
+                    products = emptyList(),
+                    errorMessage = e.message
+                )
+            )
+            throw e
         }
 
-        val temp = entities.map {
-            ProductInformationResponse(
-                productId = it.id!!,
-                productName = it.name,
-                price = it.price,
-                stock = it.stock,
-            )
-        }
-        return temp
+//        return result;
     }
+
+//    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
+//        val entities: List<Product> = productRepository.findAllById(ids)
+//        val foundIds = entities.map { it.id }.toSet()
+//        val missing = ids.filterNot { it in foundIds }
+//        if (missing.isNotEmpty()) {
+//            throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
+//        }
+//
+//        val temp = entities.map {
+//            ProductInformationResponse(
+//                productId = it.id!!,
+//                productName = it.name,
+//                price = it.price,
+//                stock = it.stock,
+//            )
+//        }
+//        return temp
+//    }
 
     @Transactional
     override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {

@@ -13,3 +13,22 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+  kafka:
+    bootstrap-servers: kafka:29092     # 컨테이너 내부에서 접속
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        linger.ms: 3
+      # retries: 3 기본값으로 크게 잡힌다고 함
+    consumer:
+      group-id: order-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: MANUAL
+      concurrency: 3

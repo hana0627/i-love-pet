@@ -35,11 +35,11 @@ class ProductController(
         return ResponseEntity.ok(response)
     }
 
-    @GetMapping(params = ["ids"])
-    fun getProducts(@RequestParam("ids") ids: List<Long>): ResponseEntity<List<ProductInformationResponse>> {
-        val response = productService.getProductsInformation(ids)
-        return ResponseEntity.ok(response)
-    }
+//    @GetMapping(params = ["ids"])
+//    fun getProducts(@RequestParam("ids") ids: List<Long>): ResponseEntity<List<ProductInformationResponse>> {
+//        val response = productService.getProductsInformation(ids)
+//        return ResponseEntity.ok(response)
+//    }
 
     @PatchMapping("/decrease-stock")
     fun decreaseStock(@RequestBody productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ResponseEntity<ProductStockDecreaseResponse> {

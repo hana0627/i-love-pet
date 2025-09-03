@@ -9,13 +9,13 @@ class OrderItem (
     val productId: Long,
 
     @Column(nullable = false, name = "product_name")
-    val productName: String,
+    var productName: String,
 
     @Column(nullable = false)
     val quantity: Int,
 
     @Column(nullable = false)
-    val price: Long,
+    var price: Long,
 
     @Column(nullable = false)
     var orderId: Long? = null,
@@ -23,5 +23,11 @@ class OrderItem (
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
+
+
+    fun updateProductNameAndPrice(productName: String, price: Long) {
+        this.productName = productName
+        this.price = price
+    }
 
 }

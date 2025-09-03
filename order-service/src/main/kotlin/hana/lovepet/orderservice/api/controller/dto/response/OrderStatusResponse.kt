@@ -2,10 +2,10 @@ package hana.lovepet.orderservice.api.controller.dto.response
 
 import hana.lovepet.orderservice.api.domain.constant.OrderStatus
 
-data class PrepareOrderResponse (
-    val orderId: String,
-    val eventId: String,
-    val amount: Long?,
+data class OrderStatusResponse(
+    val orderNo: String,
     val status: OrderStatus,
-){
+    val amount: Long?,
+    val errorMessage: String?,
+) {
 }

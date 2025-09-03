@@ -26,6 +26,8 @@ class Order (
     @Column(nullable = false)
     var status: OrderStatus = CREATED,
 
+    val paymentMethod: String,
+
     @Column(nullable = false, name = "created_at")
     val createdAt: LocalDateTime,
 ){
@@ -41,12 +43,15 @@ class Order (
     @Column(nullable = true, name = "updated_at")
     var updatedAt: LocalDateTime? = null
 
+    var description: String? = null
+
 
     companion object{
         fun create(
             userId: Long,
             userName: String,
             orderNo: String,
+            paymentMethod: String?,
             timeProvider: TimeProvider
         ): Order{
             return Order(
@@ -54,6 +59,7 @@ class Order (
                 userName = userName,
                 orderNo = orderNo,
                 status = CREATED,
+                paymentMethod = paymentMethod?:"UNKOWN",
                 createdAt = timeProvider.now(),
             )
         }
@@ -63,11 +69,20 @@ class Order (
             userId: Long = 1L,
             userName: String = "박하나",
             orderNo: String = "2025080100000001",
+            paymentMethod: String = "카드",
             timeProvider: TimeProvider
         ): Order{
-            return Order(userId, userName, orderNo, CREATED, timeProvider.now())
+            return Order(userId, userName, orderNo, CREATED, paymentMethod, timeProvider.now())
         }
     }
+
+
+    fun updateStatus(status: OrderStatus, timeProvider: TimeProvider) {
+        this.status = status
+        this.updatedAt = timeProvider.now()
+    }
+
+
 
     fun confirm(timeProvider: TimeProvider) {
         if(this.status != CREATED){
