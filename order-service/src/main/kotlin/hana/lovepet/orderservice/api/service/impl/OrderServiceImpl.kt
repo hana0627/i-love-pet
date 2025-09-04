@@ -73,19 +73,6 @@ class OrderServiceImpl(
         // 3. 상품 정보 조회 & OrderItem 스냅샷 생성
         val getProductEventId = UUID.randomUUID().toString()
 
-//        orderEventPublisher.publishGetProductsInformation(
-//            GetProductsEvent(
-//                eventId = getProductEventId,
-//                orderId = order.id!!,
-//                items = createOrderRequest.items.map {
-//                    OrderItemRequest(
-//                        productId = it.productId,
-//                        quantity = it.quantity
-//                    )
-//                },
-//                idempotencyKey = order.orderNo
-//            )
-//        )
         applicationEventPublisher.publishEvent(
             GetProductsEvent(
                 eventId = getProductEventId,

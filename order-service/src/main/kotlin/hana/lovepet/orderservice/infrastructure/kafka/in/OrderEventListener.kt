@@ -22,7 +22,7 @@ class OrderEventListener(
 
     private val log = LoggerFactory.getLogger(OrderEventListener::class.java)
 
-    @KafkaListener(topics = ["product.information.response"], groupId = "product-service")
+    @KafkaListener(topics = ["product.information.response"], groupId = "order-service")
     fun onProductsInformation(record: ConsumerRecord<String, String>,
                               ack: Acknowledgment) {
         val messages = record.value()
