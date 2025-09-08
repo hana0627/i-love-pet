@@ -1,6 +1,7 @@
 package hana.lovepet.paymentservice.infrastructure.webclient.payment.impl
 
-import hana.lovepet.paymentservice.common.exception.PgCommunicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+import hana.lovepet.paymentservice.common.exception.ApplicationException
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentCancelRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentConfirmRequest
@@ -40,23 +41,23 @@ class TossClientImpl(
                 .onStatus({ status -> status.is4xxClientError }) { res ->
                     res.bodyToMono(String::class.java).map { errorBody ->
                         log.error("토스페이먼츠 결제 승인 4xx 에러: $errorBody")
-                        throw PgCommunicationException("결제 승인 실패: $errorBody")
+                        throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 승인 실패: $errorBody")
                     }
                 }
                 .onStatus({ status -> status.is5xxServerError }) { res ->
                     res.bodyToMono(String::class.java).map { errorBody ->
                         log.error("토스페이먼츠 결제 승인 5xx 에러: $errorBody")
-                        throw PgCommunicationException("결제 서비스 장애: $errorBody")
+                        throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 서비스 장애: $errorBody")
                     }
                 }
                 .bodyToMono(TossPaymentConfirmResponse::class.java)
-                .block() ?: throw PgCommunicationException("결제 승인 응답이 없습니다.")
+                .block() ?: throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 승인 응답이 없습니다.")
 
-        } catch (e: PgCommunicationException) {
+        } catch (e: ApplicationException) {
             throw e
         } catch (e: Exception) {
             log.error("토스페이먼츠 결제 승인 중 예외 발생", e)
-            throw PgCommunicationException("결제 승인 중 오류가 발생했습니다.")
+            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 승인 중 오류가 발생했습니다.")
         }
     }
 
@@ -77,27 +78,27 @@ class TossClientImpl(
                 .onStatus({ status -> status.is4xxClientError }) { res ->
                     res.bodyToMono(String::class.java).map { errorBody ->
                         log.error("토스페이먼츠 결제 취소 4xx 에러: paymentKey=$paymentKey, error=$errorBody")
-                        throw PgCommunicationException("결제 취소 실패: $errorBody")
+                        throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 취소 실패: $errorBody")
                     }
                 }
                 .onStatus({ status -> status.is5xxServerError }) { res ->
                     res.bodyToMono(String::class.java).map { errorBody ->
                         log.error("토스페이먼츠 결제 취소 5xx 에러: paymentKey=$paymentKey, error=$errorBody")
-                        throw PgCommunicationException("결제 서비스 장애: $errorBody")
+                        throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 서비스 장애: $errorBody")
                     }
                 }
                 .bodyToMono(TossPaymentCancelResponse::class.java)
-                .block() ?: throw PgCommunicationException("결제 취소 응답이 없습니다.")
+                .block() ?: throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 취소 응답이 없습니다.")
 
             log.info("토스페이먼츠 결제 취소 성공: paymentKey=$paymentKey, status=${response.status}")
             response
 
 
-        } catch (e: PgCommunicationException) {
+        } catch (e: ApplicationException) {
             throw e
         } catch (e: Exception) {
             log.error("토스페이먼츠 결제 취소 실패: paymentKey=$paymentKey, reason=$cancelReason", e)
-            throw PgCommunicationException("결제 취소 중 오류가 발생했습니다.")
+            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 취소 중 오류가 발생했습니다.")
         }
 
     }

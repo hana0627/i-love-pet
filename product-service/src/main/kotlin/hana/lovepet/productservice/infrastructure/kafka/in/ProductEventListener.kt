@@ -1,6 +1,7 @@
 package hana.lovepet.productservice.infrastructure.kafka.`in`
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.infrastructure.kafka.Groups
 import hana.lovepet.productservice.infrastructure.kafka.Topics
@@ -30,7 +31,8 @@ class ProductEventListener(
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
-        include = [Exception::class],
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
         dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
         dltTopicSuffix = "-dlt",
         )

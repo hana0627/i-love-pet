@@ -1,5 +1,6 @@
 package hana.lovepet.paymentservice.api.payment.service.impl
 
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.ConfirmPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.FailPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
@@ -18,7 +19,8 @@ import hana.lovepet.paymentservice.api.payment.repository.PaymentLogRepository
 import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import hana.lovepet.paymentservice.common.clock.TimeProvider
-import hana.lovepet.paymentservice.common.exception.PgCommunicationException
+import hana.lovepet.paymentservice.common.exception.ApplicationException
+//import hana.lovepet.paymentservice.common.exception.PgCommunicationException
 import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
 import hana.lovepet.paymentservice.infrastructure.kafka.out.PaymentEventPublisher
 import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentPreparedEvent
@@ -66,11 +68,7 @@ class PaymentServiceImpl(
 
         // TODO 테스트용 실패
         if (amount == 999L) {
-            throw RuntimeException("테스트용 결제 준비 실패")
-        }
-        // TODO 테스트용 실패
-        if (amount == 111L) {
-            throw RuntimeException("테스트용 결제 준비 실패")
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "테스트용 결제 준비 실패")
         }
 
         // 1. 임시 Payment키 생성
@@ -111,10 +109,10 @@ class PaymentServiceImpl(
     }
 
 
-    @Transactional(noRollbackFor = [PgCommunicationException::class])
+    @Transactional(noRollbackFor = [ApplicationException::class])
     override fun confirmPayment(paymentId: Long, confirmPaymentRequest: ConfirmPaymentRequest): ConfirmPaymentResponse {
         val payment = paymentRepository.findById(paymentId)
-            .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
         // 결제확정 API 호출
         val tossResponse = try {
@@ -125,7 +123,7 @@ class PaymentServiceImpl(
                     paymentKey = confirmPaymentRequest.paymentKey
                 )
             )
-        } catch (e: PgCommunicationException) {
+        } catch (e: ApplicationException) {
             // 결제 승인 실패 로그 저장
             val paymentLog = PaymentLog.response(
                 paymentId = paymentId,
@@ -154,7 +152,7 @@ class PaymentServiceImpl(
             )
             paymentRepository.save(payment)
             paymentLogRepository.save(paymentLog)
-            throw PgCommunicationException(errorMessage)
+            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
         }
 
         // 금액 검증
@@ -171,7 +169,7 @@ class PaymentServiceImpl(
             )
             paymentRepository.save(payment)
             paymentLogRepository.save(paymentLog)
-            throw PgCommunicationException(errorMessage)
+            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
         }
 
 
@@ -193,10 +191,10 @@ class PaymentServiceImpl(
         )
     }
 
-    @Transactional(noRollbackFor = [PgCommunicationException::class])
+    @Transactional(noRollbackFor = [ApplicationException::class])
     override fun cancelPayment(paymentId: Long, paymentCancelRequest: PaymentCancelRequest): PaymentCancelResponse {
         val payment = paymentRepository.findById(paymentId)
-            .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
         // STEP1. 멱등 처리 -- 이미 취소된 건이면 성공요청으로 반환
         if (payment.status == CANCELED) {
@@ -231,12 +229,12 @@ class PaymentServiceImpl(
                     )
                 )
 
-                throw PgCommunicationException(errorMessage)
+                throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
             }
 
             // STEP6. 취소 상세 정보 추출 (가장 최근 취소 건)
             val latestCancel = tossResponse.cancels.maxByOrNull { it.canceledAt }
-                ?: throw PgCommunicationException("취소 상세 정보를 찾을 수 없습니다.")
+                ?: throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "취소 상세 정보를 찾을 수 없습니다.")
 
             if (latestCancel.cancelStatus != "DONE") {
                 log.error("토스페이먼츠 결제 취소 오류 : ${tossResponse}")
@@ -247,7 +245,7 @@ class PaymentServiceImpl(
                         message = errorMessage
                     )
                 )
-                throw PgCommunicationException(errorMessage)
+                throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
             }
 
             payment.cancel(
@@ -268,7 +266,7 @@ class PaymentServiceImpl(
                 message = "결제 취소 완료"
             )
 
-        } catch (e: PgCommunicationException) {
+        } catch (e: ApplicationException) {
             // STEP9. PG 통신 실패 로그 저장
             paymentLogRepository.save(
                 PaymentLog.response(
@@ -287,13 +285,13 @@ class PaymentServiceImpl(
                 )
             )
             log.error("결제 취소 중 예외 발생: paymentId=$paymentId", e)
-            throw PgCommunicationException("결제 취소 중 오류가 발생했습니다.")
+            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 취소 중 오류가 발생했습니다.")
         }
     }
 
 override fun getPayment(paymentId: Long): GetPaymentResponse {
     val payment = paymentRepository.findById(paymentId)
-        .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
+        .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
     return when (payment.status) {
         PENDING -> GetPaymentResponse(
@@ -361,7 +359,7 @@ override fun failPayment(
     failPaymentRequest: FailPaymentRequest,
 ): Boolean {
     val payment = paymentRepository.findById(paymentId)
-        .orElseThrow { EntityNotFoundException("Payments not found [id = $paymentId]") }
+        .orElseThrow {  ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
     payment.fail(
         timeProvider = timeProvider,

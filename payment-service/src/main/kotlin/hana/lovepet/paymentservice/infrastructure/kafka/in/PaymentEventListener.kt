@@ -2,6 +2,7 @@ package hana.lovepet.paymentservice.infrastructure.kafka.`in`
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
+import hana.lovepet.paymentservice.common.exception.ApplicationException
 import hana.lovepet.paymentservice.infrastructure.kafka.Groups
 import hana.lovepet.paymentservice.infrastructure.kafka.Topics
 import hana.lovepet.paymentservice.infrastructure.kafka.`in`.dto.PaymentPrepareEvent
@@ -30,7 +31,8 @@ class PaymentEventListener(
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
-        include = [Exception::class],
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
         dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
         dltTopicSuffix = "-dlt",
     )

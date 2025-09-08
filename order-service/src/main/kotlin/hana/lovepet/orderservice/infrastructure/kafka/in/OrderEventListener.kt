@@ -2,6 +2,7 @@ package hana.lovepet.orderservice.infrastructure.kafka.`in`
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import hana.lovepet.orderservice.api.service.OrderService
+import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.infrastructure.kafka.Groups
 import hana.lovepet.orderservice.infrastructure.kafka.Topics
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentPrepareFailEvent
@@ -28,7 +29,8 @@ class OrderEventListener(
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
-        include = [Exception::class],
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
         dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
         dltTopicSuffix = "-dlt",
     )
@@ -58,7 +60,8 @@ class OrderEventListener(
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
-        include = [Exception::class],
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
         dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
         dltTopicSuffix = "-dlt",
     )
@@ -81,8 +84,7 @@ class OrderEventListener(
         }
     }
 
-
-    //    @KafkaListener(topics = ["payment.prepared"], groupId = "order-service")
+    // TODO DLQ 처리. 근데 이거 실패할 가능성이.. 있나...
     @KafkaListener(topics = [Topics.PAYMENT_PREPARED], groupId = Groups.ORDER)
     fun onPreparedRequest(
         record: ConsumerRecord<String, String>,
@@ -118,7 +120,6 @@ class OrderEventListener(
                     orderService.orderProcessFail(failedEvent.orderId)
                     log.error("상품 정보 응답 처리 실패: orderId={}", failedEvent.orderId)
                 }
-                // const val PAYMENT_PREPARE_FAIL = "payment.prepared.fail"
                 Topics.PAYMENT_PREPARE_FAIL + "dlt" -> {
                     val failedEvent = om.readValue(record.value(), PaymentPrepareFailEvent::class.java)
                     // 단순로깅

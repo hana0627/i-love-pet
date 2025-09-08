@@ -1,7 +1,9 @@
 package hana.lovepet.paymentservice.api.payment.domain
 
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
 import hana.lovepet.paymentservice.common.clock.TimeProvider
+import hana.lovepet.paymentservice.common.exception.ApplicationException
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -62,7 +64,7 @@ class Payment(
      * 결제 성공
      */
     fun approve(timeProvider: TimeProvider, paymentKey: String) {
-        if (this.status != PaymentStatus.PENDING) throw IllegalStateException("결제 승인 불가 상태입니다.")
+        if (this.status != PaymentStatus.PENDING) throw ApplicationException(ErrorCode.ILLEGALSTATE, "결제 승인 불가 상태입니다.")
         this.status = PaymentStatus.SUCCESS
         this.approvedAt = timeProvider.now()
         this.paymentKey = paymentKey
@@ -73,7 +75,7 @@ class Payment(
      * 결제 실패
      */
     fun fail(timeProvider: TimeProvider, paymentKey: String?, failReason: String?) {
-        if (this.status != PaymentStatus.PENDING) throw IllegalStateException("결제 실패 불가 상태입니다.")
+        if (this.status != PaymentStatus.PENDING) throw ApplicationException(ErrorCode.ILLEGALSTATE, "결제 실패 불가 상태입니다.")
         this.status = PaymentStatus.FAIL
         this.paymentKey = paymentKey ?: this.paymentKey
         this.failedAt = timeProvider.now()
@@ -85,8 +87,8 @@ class Payment(
      * 결제 취소
      */
     fun cancel(timeProvider: TimeProvider, description: String?) {
-        if (status == PaymentStatus.CANCELED) {throw IllegalStateException("이미 취소된 요청입니다.")}
-        else if (status != PaymentStatus.SUCCESS) {throw IllegalStateException("승인된 결제만 취소할 수 있습니다.")}
+        if (status == PaymentStatus.CANCELED) {throw ApplicationException(ErrorCode.ILLEGALSTATE, "이미 취소된 요청입니다.")}
+        else if (status != PaymentStatus.SUCCESS) {throw ApplicationException(ErrorCode.ILLEGALSTATE, "승인된 결제만 취소할 수 있습니다.")}
         this.status = PaymentStatus.CANCELED
         this.canceledAt = timeProvider.now()
         this.description = description
@@ -97,7 +99,7 @@ class Payment(
      * 결제 환불
      */
     fun refund(timeProvider: TimeProvider, description: String?) {
-        if (status != PaymentStatus.SUCCESS && status != PaymentStatus.CANCELED) throw IllegalStateException("환불 처리 불가 상태입니다.")
+        if (status != PaymentStatus.SUCCESS && status != PaymentStatus.CANCELED) throw ApplicationException(ErrorCode.ILLEGALSTATE, "환불 처리 불가 상태입니다.")
         this.status = PaymentStatus.REFUNDED
         this.refundedAt = timeProvider.now()
         this.description = description

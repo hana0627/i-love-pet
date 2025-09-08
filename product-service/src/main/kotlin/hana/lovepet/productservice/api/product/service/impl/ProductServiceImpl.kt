@@ -1,5 +1,7 @@
 package hana.lovepet.productservice.api.product.service.impl
 
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
@@ -25,7 +27,7 @@ class ProductServiceImpl(
     private val timeProvider: TimeProvider,
 
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private  val productEventPublisher: ProductEventPublisher,
+    private val productEventPublisher: ProductEventPublisher,
 ) : ProductService {
 
     @Transactional
@@ -69,44 +71,39 @@ class ProductServiceImpl(
         val foundProducts: List<Product> = productRepository.findAllById(ids)
         val foundIds = foundProducts.map { it.id }.toSet()
         val missing = ids.filterNot { it in foundIds }
-        try {
-            if (missing.isNotEmpty()) {
-                throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
-            }
 
-            val result = foundProducts.map { entity ->
-                val orderItem = productQuantityMap[entity.id!!]!!
-                ProductsInformationResponseEvent.ProductInformationResponse(
-                    productId = entity.id!!,
-                    productName = entity.name,
-                    price = entity.price,
-                    stock = entity.stock,
-                    quantity = orderItem.quantity
-                )
-            }
-
-            // TODO 상품명에 "없는상품"이 있으면 예외처리
-            foundProducts.forEach { it ->
-                if(it.name.contains("없는상품")) {
-                    throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $it.id")
-                }
-            }
-
-
-            // 성공이벤트 발행
-            productEventPublisher.publishProductsInformation(
-                ProductsInformationResponseEvent(
-                    eventId = UUID.randomUUID().toString(),
-                    orderId = orderId,
-                    success = true,
-                    products = result,
-                    )
-            )
-
-
-        } catch(e: Exception) {
-            throw e
+        if (missing.isNotEmpty()) {
+            throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $missing")
         }
+
+        val result = foundProducts.map { entity ->
+            val orderItem = productQuantityMap[entity.id!!]!!
+            ProductsInformationResponseEvent.ProductInformationResponse(
+                productId = entity.id!!,
+                productName = entity.name,
+                price = entity.price,
+                stock = entity.stock,
+                quantity = orderItem.quantity
+            )
+        }
+
+        // TODO 상품명에 "없는상품"이 있으면 예외처리
+        foundProducts.forEach { it ->
+            if (it.name.contains("없는상품")) {
+                throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.id}")
+            }
+        }
+
+
+        // 성공이벤트 발행
+        productEventPublisher.publishProductsInformation(
+            ProductsInformationResponseEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = orderId,
+                success = true,
+                products = result,
+            )
+        )
     }
 
 //    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
@@ -114,6 +111,7 @@ class ProductServiceImpl(
 //        val foundIds = entities.map { it.id }.toSet()
 //        val missing = ids.filterNot { it in foundIds }
 //        if (missing.isNotEmpty()) {
+//            throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $missing")
 //            throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
 //        }
 //
@@ -130,7 +128,7 @@ class ProductServiceImpl(
 
     @Transactional
     override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
-        val ids = productStockDecreaseRequests.map {it.productId}
+        val ids = productStockDecreaseRequests.map { it.productId }
 
         val products = productRepository.findAllByIdWithLock(ids)
 
@@ -138,8 +136,8 @@ class ProductServiceImpl(
         // TODO 삭제
         // -- 예외상황 검증 추가 - start
         products.forEach { it ->
-            if(it.name.contains("재고부족")) {
-                throw IllegalStateException("재고가 부족합니다.")
+            if (it.name.contains("재고부족")) {
+                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
             }
         }
 
@@ -149,7 +147,7 @@ class ProductServiceImpl(
 
         productStockDecreaseRequests.forEach {
             val product = productMap[it.productId]
-                ?: throw EntityNotFoundException("상품 ${it.productId} 없음")
+                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
             product.decreaseStock(it.quantity, timeProvider)
         }
 
@@ -164,6 +162,6 @@ class ProductServiceImpl(
 
     private fun getProductOrException(productId: Long): Product {
         return productRepository.findById(productId)
-            .orElseThrow { EntityNotFoundException("상품을 찾을 수 없습니다. [id = $productId]") }
+            .orElseThrow { ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $productId") }
     }
 }

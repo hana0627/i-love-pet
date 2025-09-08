@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 @RestControllerAdvice
 class RestControllerHandler {
-    private  val log = LoggerFactory.getLogger(RestControllerHandler::class.java)
+    private val log = LoggerFactory.getLogger(RestControllerHandler::class.java)
 
     @ExceptionHandler(EntityNotFoundException::class)
     fun handleEntityNotFound(e: Exception): ResponseEntity<ErrorResponse> {

@@ -3,6 +3,8 @@ package hana.lovepet.orderservice.api.domain
 import hana.lovepet.orderservice.api.domain.constant.OrderStatus
 import hana.lovepet.orderservice.api.domain.constant.OrderStatus.*
 import hana.lovepet.orderservice.common.clock.TimeProvider
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -86,7 +88,7 @@ class Order (
 
     fun confirm(timeProvider: TimeProvider) {
         if(this.status != CREATED){
-            throw IllegalStateException("CREADTED인 상품만 CONFIRM이 가능합니다.")
+            throw ApplicationException(ErrorCode.ILLEGALSTATE,"CREADTED인 상품만 CONFIRM이 가능합니다.")
         } else {
             this.status = CONFIRMED
             this.updatedAt = timeProvider.now()
@@ -96,7 +98,7 @@ class Order (
 
     fun fail(timeProvider: TimeProvider) {
         if(this.status != CREATED){
-            throw IllegalStateException("CREATED인 상품만 FAIL이 가능합니다.")
+            throw ApplicationException(ErrorCode.ILLEGALSTATE, "CREATED인 상품만 FAIL이 가능합니다.")
         }
         this.status = FAIL
         this.updatedAt = timeProvider.now()
@@ -104,7 +106,7 @@ class Order (
 
     fun cancel(timeProvider: TimeProvider) {
         if(this.status == CANCELED) {
-            throw IllegalStateException("이미 취소된 상품입니다.")
+            throw ApplicationException(ErrorCode.ILLEGALSTATE, "이미 취소된 상품입니다.")
         }
         this.status = CANCELED
         this.updatedAt = timeProvider.now()

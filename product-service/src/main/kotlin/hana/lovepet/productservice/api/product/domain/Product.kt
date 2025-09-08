@@ -1,5 +1,7 @@
 package hana.lovepet.productservice.api.product.domain
 
+import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.common.clock.TimeProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime
@@ -48,7 +50,7 @@ class Product (
 
     fun decreaseStock(quantity: Int, timeProvider: TimeProvider) {
         if(stock < quantity) {
-            throw IllegalStateException("재고가 부족합니다.")
+            throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
         }
         stock -= quantity
         updatedAt = timeProvider.now()

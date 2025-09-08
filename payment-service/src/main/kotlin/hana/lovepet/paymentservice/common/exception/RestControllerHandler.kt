@@ -1,7 +1,8 @@
 package hana.lovepet.paymentservice.common.exception
 
-import hana.lovepet.paymentservice.common.exception.response.ErrorResponse
+import hana.lovepet.paymentservice.common.exception.ErrorResponse
 import jakarta.persistence.EntityNotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 @RestControllerAdvice
 class RestControllerHandler {
+    private val log = LoggerFactory.getLogger(RestControllerHandler::class.java)
 
     @ExceptionHandler(EntityNotFoundException::class)
     fun handleEntityNotFound(e: Exception): ResponseEntity<ErrorResponse> {
@@ -16,10 +18,10 @@ class RestControllerHandler {
     }
 
 
-    @ExceptionHandler(PgCommunicationException::class)
-    fun handlePgCommunicationException(e: Exception): ResponseEntity<ErrorResponse> {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-            .body(ErrorResponse(e.message ?: "PgCommunication error"))
+    @ExceptionHandler(RuntimeException::class)
+    fun handleRuntime(e: Exception): ResponseEntity<ErrorResponse> {
+        log.error(e.toString())
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse(e.message ?: "Entity not found"))
     }
 }
 
