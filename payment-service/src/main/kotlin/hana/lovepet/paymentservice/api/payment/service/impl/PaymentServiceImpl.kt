@@ -55,6 +55,24 @@ class PaymentServiceImpl(
         amount: Long,
         method: String,
     ): PreparePaymentResponse {
+        // 0. 멱등처리
+        val foundPayment = paymentRepository.findByOrderId(orderId)
+        if(foundPayment != null){
+            log.warn("이미 결제가 준비된 주문: orderId=$orderId")
+            return PreparePaymentResponse(
+                paymentId = foundPayment.id!!,
+            )
+        }
+
+        // TODO 테스트용 실패
+        if (amount == 999L) {
+            throw RuntimeException("테스트용 결제 준비 실패")
+        }
+        // TODO 테스트용 실패
+        if (amount == 111L) {
+            throw RuntimeException("테스트용 결제 준비 실패")
+        }
+
         // 1. 임시 Payment키 생성
         val tempPaymentKey = uuidGenerator.generate()
         // 2. Payment 초기 엔티티 생성
@@ -86,16 +104,6 @@ class PaymentServiceImpl(
                 idempotencyKey = payment.paymentKey,
             )
         )
-//        paymentEventPublisher.publishPaymentPrepared(
-//            PaymentPreparedEvent(
-//                eventId = uuidGenerator.generate(),
-//                occurredAt = payment.requestedAt,
-//                orderId = payment.orderId,
-//                paymentId = payment.id!!,
-//                idempotencyKey = payment.paymentKey,
-//            )
-//        )
-
 
         return PreparePaymentResponse(
             paymentId = payment.id!!,

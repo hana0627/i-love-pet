@@ -18,6 +18,9 @@ import org.springframework.data.domain.Pageable
 interface OrderService {
     fun prepareOrder(createOrderRequest: CreateOrderRequest): PrepareOrderResponse
     fun mappedTotalAmount(orderId: Long, products: List<ProductInformationResponse>)
+    fun validationFail(orderId: Long)
+    fun orderProcessFail(orderId: Long)
+    fun paymentPrepareFail(orderId: Long)
     fun mappedPaymentId(orderId: Long, paymentId: Long)
     fun getStatus(orderNo: String): OrderStatusResponse
 //    fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse

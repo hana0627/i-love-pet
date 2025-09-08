@@ -260,20 +260,35 @@ function OrderCreate() {
         const statusData = await statusRes.json();
         console.log(`폴링 ${attempts + 1}회차:`, statusData);
 
-        // 성공: 금액이 계산됨
-        if (statusData.amount && statusData.amount > 0) {
+        if(statusData.status =="CREATED" || statusData.status =="VALIDATING") {
+
+        }
+        else if(statusData.status =="CONFIRMED") {
           hideLoadingMessage();
           return {
             orderId: statusData.orderNo || orderNo,
             amount: statusData.amount
           };
         }
+        else {
+          hideLoadingMessage();
+          throw new Error("결제 준비에 실패했습니다.")
+        }
+
+        // 성공: 금액이 계산됨
+        // if (statusData.amount && statusData.amount > 0) {
+        //   hideLoadingMessage();
+        //   return {
+        //     orderId: statusData.orderNo || orderNo,
+        //     amount: statusData.amount
+        //   };
+        // }
 
         // 실패: 에러 메시지가 있음
-        if (statusData.errorMessage) {
-          hideLoadingMessage();
-          throw new Error(statusData.errorMessage);
-        }
+        // if (statusData.errorMessage) {
+        //   hideLoadingMessage();
+        //   throw new Error(statusData.errorMessage);
+        // }
 
         // 아직 처리 중: 1초 후 재시도
         // await sleep(1000);

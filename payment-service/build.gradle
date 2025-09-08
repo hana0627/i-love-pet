@@ -35,6 +35,8 @@ dependencies {
 
 	//kafka - start
 	implementation 'org.springframework.kafka:spring-kafka'
+	implementation 'org.springframework.retry:spring-retry'
+
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
 	//kafka - end
 

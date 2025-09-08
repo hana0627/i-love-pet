@@ -16,14 +16,13 @@ class OrderEventPublisher(
     private val om: ObjectMapper,
 ) {
 
-    private val orderCreatedTopic = "order.create"
 //    private val paymentPrepareTopic = "payment.prepare"
 
 
-    fun publishOrderCreated(event: OrderCreateEvent) {
-        val json = om.writeValueAsString(event)
-        kafkaTemplate.send(orderCreatedTopic, event.orderNo, json)
-    }
+//    fun publishOrderCreated(event: OrderCreateEvent) {
+//        val json = om.writeValueAsString(event)
+//        kafkaTemplate.send(orderCreatedTopic, event.orderNo, json)
+//    }
 
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -33,6 +32,6 @@ class OrderEventPublisher(
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun publishGetProductsInformation(event: GetProductsEvent) {
-        kafkaTemplate.send("product.information.request", event.orderId.toString(), om.writeValueAsString(event))
+        kafkaTemplate.send(Topics.PRODUCT_INFORMATION_REQUEST, event.orderId.toString(), om.writeValueAsString(event))
     }
 }

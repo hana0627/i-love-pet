@@ -10,6 +10,7 @@ import hana.lovepet.productservice.api.product.repository.ProductRepository
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.common.clock.TimeProvider
 import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.GetProductsEvent.OrderItemRequest
+import hana.lovepet.productservice.infrastructure.kafka.out.ProductEventPublisher
 import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductsInformationResponseEvent
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.context.ApplicationEventPublisher
@@ -24,6 +25,7 @@ class ProductServiceImpl(
     private val timeProvider: TimeProvider,
 
     private val applicationEventPublisher: ApplicationEventPublisher,
+    private  val productEventPublisher: ProductEventPublisher,
 ) : ProductService {
 
     @Transactional
@@ -60,21 +62,19 @@ class ProductServiceImpl(
         }
     }
 
-    @Transactional
-//    override fun getProductsInformation(orderId: Long, products: List<OrderItemRequest>): List<ProductInformationResponse> {
     override fun getProductsInformation(orderId: Long, products: List<OrderItemRequest>) {
         val ids = products.map { it -> it.productId }
         val productQuantityMap = products.associateBy { it.productId } // 수량 매핑용
 
-        val entities: List<Product> = productRepository.findAllById(ids)
-        val foundIds = entities.map { it.id }.toSet()
+        val foundProducts: List<Product> = productRepository.findAllById(ids)
+        val foundIds = foundProducts.map { it.id }.toSet()
         val missing = ids.filterNot { it in foundIds }
         try {
             if (missing.isNotEmpty()) {
                 throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
             }
 
-            val result = entities.map { entity ->
+            val result = foundProducts.map { entity ->
                 val orderItem = productQuantityMap[entity.id!!]!!
                 ProductsInformationResponseEvent.ProductInformationResponse(
                     productId = entity.id!!,
@@ -84,32 +84,29 @@ class ProductServiceImpl(
                     quantity = orderItem.quantity
                 )
             }
+
+            // TODO 상품명에 "없는상품"이 있으면 예외처리
+            foundProducts.forEach { it ->
+                if(it.name.contains("없는상품")) {
+                    throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $it.id")
+                }
+            }
+
+
             // 성공이벤트 발행
-            applicationEventPublisher.publishEvent(
+            productEventPublisher.publishProductsInformation(
                 ProductsInformationResponseEvent(
                     eventId = UUID.randomUUID().toString(),
                     orderId = orderId,
                     success = true,
                     products = result,
-
                     )
             )
 
+
         } catch(e: Exception) {
-            // 실패이벤트 발행
-            applicationEventPublisher.publishEvent(
-                ProductsInformationResponseEvent(
-                    eventId = UUID.randomUUID().toString(),
-                    orderId = orderId,
-                    success = false,
-                    products = emptyList(),
-                    errorMessage = e.message
-                )
-            )
             throw e
         }
-
-//        return result;
     }
 
 //    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {

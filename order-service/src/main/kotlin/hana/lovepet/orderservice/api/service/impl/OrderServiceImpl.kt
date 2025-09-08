@@ -131,7 +131,7 @@ class OrderServiceImpl(
             return
         }
 
-        order.updateStatus(OrderStatus.CONFIRMED, timeProvider)
+        order.updateStatus(OrderStatus.VALIDATION_SUCCESS, timeProvider)
         orderRepository.save(order)
         orderItemRepository.saveAll(orderItems)
 
@@ -149,10 +149,33 @@ class OrderServiceImpl(
     }
 
     @Transactional
+    override fun validationFail(orderId: Long) {
+        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        order.updateStatus(status = OrderStatus.VALIDATION_FAILED, timeProvider)
+        orderRepository.save(order)
+    }
+
+    @Transactional
+    override fun orderProcessFail(orderId: Long) {
+        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        order.updateStatus(status = OrderStatus.PROCESSING_FAILED, timeProvider)
+        orderRepository.save(order)
+    }
+
+    @Transactional
+    override fun paymentPrepareFail(orderId: Long) {
+        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        order.updateStatus(status = OrderStatus.PAYMENT_PREPARE_FAIL, timeProvider)
+        orderRepository.save(order)
+    }
+
+
+    @Transactional
     override fun mappedPaymentId(orderId: Long, paymentId:Long) {
         val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
         if(order.paymentId == null) {
             order.mappedPaymentId(paymentId)
+            order.updateStatus(status = OrderStatus.CONFIRMED, timeProvider)
             orderRepository.save(order)
         }
         else {
