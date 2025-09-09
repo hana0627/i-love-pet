@@ -60,11 +60,11 @@ class OrderController (
         else ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response)
     }
 
-    @PatchMapping("/fail")
-    fun failOrder(@RequestBody failOrderRequest: FailOrderRequest): ResponseEntity<Boolean> {
-        val response = orderService.failOrder(failOrderRequest)
-        return ResponseEntity.status(HttpStatus.OK).body(response)
-    }
+//    @PatchMapping("/fail")
+//    fun failOrder(@RequestBody failOrderRequest: FailOrderRequest): ResponseEntity<Boolean> {
+//        val response = orderService.failOrder(failOrderRequest)
+//        return ResponseEntity.status(HttpStatus.OK).body(response)
+//    }
 
 //    @PostMapping
 //    fun createOrder(@RequestBody createOrderRequest: CreateOrderRequest): ResponseEntity<OrderCreateResponse> {

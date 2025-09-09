@@ -8,17 +8,24 @@ import hana.lovepet.productservice.api.product.controller.dto.response.ProductIn
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductStockDecreaseResponse
 import hana.lovepet.productservice.api.product.domain.Product
+import hana.lovepet.productservice.api.product.repository.ProductCacheRepository
 import hana.lovepet.productservice.api.product.repository.ProductRepository
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.common.clock.TimeProvider
 import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.GetProductsEvent.OrderItemRequest
+import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.ProductStockDecreaseEvent
+import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.ProductStockRollbackEvent
 import hana.lovepet.productservice.infrastructure.kafka.out.ProductEventPublisher
+import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductStockDecreasedEvent
 import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductsInformationResponseEvent
 import jakarta.persistence.EntityNotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 @Transactional(readOnly = true)
@@ -28,7 +35,12 @@ class ProductServiceImpl(
 
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val productEventPublisher: ProductEventPublisher,
+
+    private val productCacheRepository: ProductCacheRepository,
 ) : ProductService {
+
+    private val log = LoggerFactory.getLogger(ProductServiceImpl::class.java)
+
 
     @Transactional
     override fun register(productRegisterRequest: ProductRegisterRequest): ProductRegisterResponse {
@@ -106,6 +118,79 @@ class ProductServiceImpl(
         )
     }
 
+    @Transactional
+    override fun decreaseStock(orderId: Long, productStockDecreaseRequests: List<ProductStockDecreaseEvent.Product>) {
+
+//        if (processingOrders.containsKey(orderId)) {
+//            log.warn("이미 처리 중인 재고 차감 요청: orderId=$orderId")
+//            return
+//        }
+//        processingOrders[orderId] = timeProvider.now()
+        if (productCacheRepository.getDecreased(orderId)) {
+            log.warn("이미 처리 중인 재고 차감 요청: orderId=$orderId")
+            return
+        }
+        productCacheRepository.setDecreased(orderId)
+
+
+        val ids = productStockDecreaseRequests.map { it.productId }
+
+        val products = productRepository.findAllByIdWithLock(ids)
+
+
+        // TODO 삭제
+        // -- 예외상황 검증 추가 - start
+        products.forEach { it ->
+            if (it.name.contains("재고부족")) {
+                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
+            }
+        }
+        // -- 예외상황 검증 추가 - end
+
+        val productMap = products.associateBy { it.id }
+
+        productStockDecreaseRequests.forEach {
+            val product = productMap[it.productId]
+                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
+            product.decreaseStock(it.quantity, timeProvider)
+        }
+
+        productRepository.saveAll(products)
+
+        applicationEventPublisher.publishEvent(ProductStockDecreasedEvent(
+            eventId = UUID.randomUUID().toString(),
+            orderId = orderId,
+            success = true,
+            idempotencyKey = orderId.toString(),
+        ))
+    }
+
+    @Transactional
+    override fun rollbackStock(
+        orderId: Long,
+        rollbackProducts: List<ProductStockRollbackEvent.Product>,
+    ) {
+
+        if (productCacheRepository.getRollbacked(orderId)) {
+            log.warn("이미 처리 중인 재고 롤백 요청: orderId=$orderId")
+            return
+        }
+        productCacheRepository.setRollbacked(orderId)
+
+
+        val ids = rollbackProducts.map { it.productId }
+
+        val products = productRepository.findAllByIdWithLock(ids)
+        val productMap = products.associateBy { it.id }
+
+        rollbackProducts.forEach {
+            val product = productMap[it.productId]
+                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
+            product.increaseStock(it.quantity, timeProvider)
+        }
+        productRepository.saveAll(products)
+    }
+
 //    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
 //        val entities: List<Product> = productRepository.findAllById(ids)
 //        val foundIds = entities.map { it.id }.toSet()
@@ -126,35 +211,7 @@ class ProductServiceImpl(
 //        return temp
 //    }
 
-    @Transactional
-    override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
-        val ids = productStockDecreaseRequests.map { it.productId }
 
-        val products = productRepository.findAllByIdWithLock(ids)
-
-
-        // TODO 삭제
-        // -- 예외상황 검증 추가 - start
-        products.forEach { it ->
-            if (it.name.contains("재고부족")) {
-                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
-            }
-        }
-
-        // -- 예외상황 검증 추가 - end
-
-        val productMap = products.associateBy { it.id }
-
-        productStockDecreaseRequests.forEach {
-            val product = productMap[it.productId]
-                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
-            product.decreaseStock(it.quantity, timeProvider)
-        }
-
-        productRepository.saveAll(products)
-
-        return ProductStockDecreaseResponse(true)
-    }
 
 //    override fun getStock(productId: Long): Int {
 //        return getProductOrException(productId).stock
@@ -164,4 +221,35 @@ class ProductServiceImpl(
         return productRepository.findById(productId)
             .orElseThrow { ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $productId") }
     }
+
+    // 기존코드 남김
+//    @Transactional
+//    override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
+//        val ids = productStockDecreaseRequests.map { it.productId }
+//
+//        val products = productRepository.findAllByIdWithLock(ids)
+//
+//
+//        // TODO 삭제
+//        // -- 예외상황 검증 추가 - start
+//        products.forEach { it ->
+//            if (it.name.contains("재고부족")) {
+//                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
+//            }
+//        }
+//
+//        // -- 예외상황 검증 추가 - end
+//
+//        val productMap = products.associateBy { it.id }
+//
+//        productStockDecreaseRequests.forEach {
+//            val product = productMap[it.productId]
+//                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
+//            product.decreaseStock(it.quantity, timeProvider)
+//        }
+//
+//        productRepository.saveAll(products)
+//
+//        return ProductStockDecreaseResponse(true)
+//    }
 }

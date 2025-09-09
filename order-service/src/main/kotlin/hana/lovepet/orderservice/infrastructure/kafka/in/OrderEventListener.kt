@@ -7,6 +7,7 @@ import hana.lovepet.orderservice.infrastructure.kafka.Groups
 import hana.lovepet.orderservice.infrastructure.kafka.Topics
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentPrepareFailEvent
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentPreparedEvent
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductStockDecreasedEvent
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductsInformationResponseEvent
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
@@ -106,6 +107,37 @@ class OrderEventListener(
     }
 
 
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
+    @KafkaListener(topics = [Topics.PRODUCT_STOCK_DECREASED], groupId = Groups.ORDER)
+    fun onDecreasedStock(
+        record: ConsumerRecord<String, String>,
+        ack: Acknowledgment,
+    ) {
+        val messages = record.value()
+        try {
+            val readValue = om.readValue(messages, ProductStockDecreasedEvent::class.java)
+            if(readValue.success) {
+                val result = orderService.processOrder(readValue.orderId)
+            }else {
+                val result = orderService.decreaseStockFail(readValue.orderId)
+            }
+            log.info("stock decreased. orderId={}, paymentId={}", readValue.orderId)
+            ack.acknowledge()
+        } catch (e: Exception) {
+            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+//            ack.acknowledge()
+            throw e
+        }
+    }
+
+
     @DltHandler
     fun handleDeadLetterTopic(
         record: ConsumerRecord<String, String>,
@@ -130,6 +162,19 @@ class OrderEventListener(
                 //     val failedEvent = om.readValue(record.value(), PaymentPreparedEvent::class.java)
                 //     orderService.paymentProcessFail(failedEvent.orderId)
                 // }
+                Topics.PRODUCT_STOCK_DECREASED + "-dlt" -> {
+                    val failedEvent = om.readValue(record.value(), ProductStockDecreasedEvent::class.java)
+
+                    if (failedEvent.success) {
+                        // processOrder에서 실패한 경우 - 재고 롤백 필요
+                        log.error("결제 처리 실패로 재고 롤백 필요: orderId={}", failedEvent.orderId)
+                        orderService.rollbackStockAndCancel(failedEvent.orderId)
+                    } else {
+                        // decreaseStockFail에서 실패한 경우 - 이미 실패 처리된 상태이므로 로깅만
+                        log.error("재고 차감 실패 처리도 실패: orderId={}", failedEvent.orderId)
+                        orderService.failOrder(failedEvent.orderId)
+                    }
+                }
                 else -> {
                     log.error("알 수 없는 DLT 토픽: {}", record.topic())
                 }

@@ -23,9 +23,13 @@ interface OrderService {
     fun paymentPrepareFail(orderId: Long)
     fun mappedPaymentId(orderId: Long, paymentId: Long)
     fun getStatus(orderNo: String): OrderStatusResponse
-//    fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse
+    fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse
+    fun processOrder(orderId: Long)
+    fun decreaseStockFail(orderId: Long)
+    fun rollbackStockAndCancel(orderId: Long)
+    //    fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse
     fun getOrders(orderSearchCondition: OrderSearchCondition, pageable: Pageable): Page<GetOrdersResponse>
     fun getOrderItems(orderNo: String): List<GetOrderItemsResponse>
-    fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse
-    fun failOrder(failOrderRequest: FailOrderRequest): Boolean
+//    fun failOrder(failOrderRequest: FailOrderRequest): Boolean
+    fun failOrder(orderId: Long): Boolean
 }

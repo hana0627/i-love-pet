@@ -13,6 +13,7 @@ import hana.lovepet.orderservice.api.controller.dto.response.PrepareOrderRespons
 import hana.lovepet.orderservice.api.domain.Order
 import hana.lovepet.orderservice.api.domain.OrderItem
 import hana.lovepet.orderservice.api.domain.constant.OrderStatus
+import hana.lovepet.orderservice.api.repository.OrderCacheRepository
 import hana.lovepet.orderservice.api.repository.OrderItemRepository
 import hana.lovepet.orderservice.api.repository.OrderRepository
 import hana.lovepet.orderservice.api.service.OrderService
@@ -23,14 +24,13 @@ import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductsInformati
 import hana.lovepet.orderservice.infrastructure.kafka.out.OrderEventPublisher
 import hana.lovepet.orderservice.infrastructure.kafka.out.dto.GetProductsEvent
 import hana.lovepet.orderservice.infrastructure.kafka.out.dto.GetProductsEvent.OrderItemRequest
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.PaymentCancelEvent
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.PaymentPendingEvent
 import hana.lovepet.orderservice.infrastructure.kafka.out.dto.PaymentPrepareEvent
 import hana.lovepet.orderservice.infrastructure.webClient.payment.PaymentServiceClient
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.ConfirmPaymentRequest
 import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.FailPaymentRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PaymentCancelRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.request.PreparePaymentRequest
-import hana.lovepet.orderservice.infrastructure.webClient.payment.dto.response.PreparePaymentResponse
-import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.ProductStockDecreaseEvent
+import hana.lovepet.orderservice.infrastructure.kafka.out.dto.ProductStockRollbackEvent
 //import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 import hana.lovepet.orderservice.infrastructure.webClient.user.UserServiceClient
 import hana.lovepet.orderservice.infrastructure.webClient.user.dto.UserExistResponse
@@ -55,6 +55,8 @@ class OrderServiceImpl(
 
     private val orderEventPublisher: OrderEventPublisher,
     private val applicationEventPublisher: ApplicationEventPublisher,
+
+    private val orderCacheRepository: OrderCacheRepository
 ) : OrderService {
     val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
 
@@ -105,7 +107,8 @@ class OrderServiceImpl(
     @Transactional
     override fun mappedTotalAmount(orderId: Long, products: List<ProductInformationResponse>) {
 
-        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
         val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
 
         if (order.price != 0L) {
@@ -150,35 +153,38 @@ class OrderServiceImpl(
 
     @Transactional
     override fun validationFail(orderId: Long) {
-        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
         order.updateStatus(status = OrderStatus.VALIDATION_FAILED, timeProvider)
         orderRepository.save(order)
     }
 
     @Transactional
     override fun orderProcessFail(orderId: Long) {
-        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
         order.updateStatus(status = OrderStatus.PROCESSING_FAILED, timeProvider)
         orderRepository.save(order)
     }
 
     @Transactional
     override fun paymentPrepareFail(orderId: Long) {
-        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
         order.updateStatus(status = OrderStatus.PAYMENT_PREPARE_FAIL, timeProvider)
         orderRepository.save(order)
     }
 
 
     @Transactional
-    override fun mappedPaymentId(orderId: Long, paymentId:Long) {
-        val order = orderRepository.findById(orderId).orElseThrow{ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)}
-        if(order.paymentId == null) {
+    override fun mappedPaymentId(orderId: Long, paymentId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+        if (order.paymentId == null) {
             order.mappedPaymentId(paymentId)
-            order.updateStatus(status = OrderStatus.CONFIRMED, timeProvider)
+            order.updateStatus(status = OrderStatus.PREPARED, timeProvider)
             orderRepository.save(order)
-        }
-        else {
+        } else {
             log.info("멱등처리. 이미 맵핑된 paymentId : order = $order")
         }
     }
@@ -196,6 +202,7 @@ class OrderServiceImpl(
                 amount = order.price,
                 errorMessage = null,
             )
+
             else -> OrderStatusResponse(
                 orderNo = order.orderNo,
                 status = order.status,
@@ -205,9 +212,13 @@ class OrderServiceImpl(
         }
     }
 
-
-    @Transactional(noRollbackFor = [ApplicationException::class])
+    //    @Transactional(noRollbackFor = [ApplicationException::class])
+    /**
+     * 결제 요청
+     */
+    @Transactional
     override fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse {
+        println("여기진행합니다. 고고고")
         // 1. 주문 찾기 & 상태검증
         val order = orderRepository.findByOrderNo(confirmOrderResponse.orderId)
             ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
@@ -218,11 +229,11 @@ class OrderServiceImpl(
             return ConfirmOrderResponse(
                 success = true,
                 orderNo = order.orderNo,
-                paymentId = order.paymentId,
+//                paymentId = order.paymentId,
                 message = "이미 결제 완료된 주문입니다."
             )
         }
-        if (order.status != OrderStatus.CREATED) {
+        if (order.status != OrderStatus.PREPARED) {
             return ConfirmOrderResponse(
                 success = false,
                 orderNo = order.orderNo,
@@ -239,86 +250,119 @@ class OrderServiceImpl(
             )
         }
 
-        // 3) 재고 차감 (부분 실패 시 여기서 예외 발생 가정)
-        try {
-            val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
-            decreaseStock(orderItems)
-        } catch (e: ApplicationException) {
-            log.error("재고차감실패! paymentId=${order.paymentId}, error=${e.message}")
-            // 4) 보상 트랜잭션: 결제 취소 시도
-            try {
-                paymentServiceClient.cancel(
-                    paymentId = order.paymentId!!,
-                    paymentCancelRequest = PaymentCancelRequest(refundReason = "재고 차감 실패: ${e.message}")
-                )
-            } catch (cancelException: ApplicationException) {
-                log.error("결제 취소 실패(수동 보상 필요) orderId=${order.id}, reason=${cancelException.getMessage}")
-                throw ApplicationException(cancelException.errorCode, cancelException.getMessage)
-            }
+        val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
 
-            order.fail(timeProvider)
-            orderRepository.save(order)
-            return ConfirmOrderResponse(
-                success = false,
-                orderNo = order.orderNo,
-                message = "재고 차감 실패로 결제 취소됨"
-            )
-        }
 
-        // 결제 확정
-        try {
-            paymentServiceClient.confirm(
-                ConfirmPaymentRequest(
-                    orderId = order.id!!,
-                    orderNo = order.orderNo,
-                    paymentId = order.paymentId!!,
-                    paymentKey = confirmOrderResponse.paymentKey,
-                    amount = confirmOrderResponse.amount,
-                )
-            )
-        } catch (e: ApplicationException) {
-            order.fail(timeProvider)
-            orderRepository.save(order)
-            log.error("paymentService 통신 중 오류발생 - paymentId=${order.paymentId}, error=${e.message}")
-            return ConfirmOrderResponse(
-                success = false,
-                orderNo = order.orderNo,
-                message = "결제서비스 통신 오류: ${e.message}"
-            )
-        }
+        orderCacheRepository.setPaymentKey(order.id!!, confirmOrderResponse.paymentKey)
 
-        // 5) 최종 주문 확정
-        order.confirm(timeProvider)
+        decreaseStock(order.id!!, order.orderNo, orderItems)
+
+        order.updateStatus(OrderStatus.DECREASE_STOCK, timeProvider)
         orderRepository.save(order)
 
         return ConfirmOrderResponse(
             success = true,
             orderNo = order.orderNo,
-            paymentId = order.paymentId,
-            message = "결제/주문 확정 완료"
+//            paymentId = order.paymentId,
+//            message = "결제/주문 확정 완료"
+        )
+    }
+
+
+    @Transactional
+    override fun processOrder(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+        order.updateStatus(OrderStatus.PAYMENT_PENDING, timeProvider)
+
+        val paymentKey = orderCacheRepository.findPaymentKeyByOrderId(order.id!!)
+            ?: throw ApplicationException(PAYMENT_KEY_EXPIRED, "PaymentKey 만료 또는 누락")
+
+        applicationEventPublisher.publishEvent(
+            PaymentPendingEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = orderId,
+                paymentKey = paymentKey,
+                amount = order.price,
+                idempotencyKey = paymentKey
+            )
         )
     }
 
     @Transactional
-    override fun failOrder(failOrderRequest: FailOrderRequest): Boolean {
+    override fun decreaseStockFail(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+        order.updateStatus(OrderStatus.DECREASE_STOCK_FAIL, timeProvider)
+
+        val paymentKey = orderCacheRepository.findPaymentKeyByOrderId(order.id!!)
+            ?: throw ApplicationException(PAYMENT_KEY_EXPIRED, "PaymentKey 만료 또는 누락")
+
+        applicationEventPublisher.publishEvent(
+            PaymentCancelEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = orderId,
+                paymentKey = paymentKey,
+                idempotencyKey = paymentKey
+            )
+        )
+    }
+
+    @Transactional
+    override fun rollbackStockAndCancel(orderId: Long) {
         // 1. 주문 찾기 & 상태검증
-        val order = orderRepository.findByOrderNo(failOrderRequest.orderId)
-            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+
+        val orderItems = orderItemRepository.findAllByOrderId(orderId)
+
+        val productMap = orderItems.map { ProductStockRollbackEvent.Product(it.productId, it.quantity) }
 
         // 2. 주문상태변경
         order.fail(timeProvider)
 
-        paymentServiceClient.fail(
-            FailPaymentRequest(
-                orderId = order.id!!,
-                paymentId = order.paymentId!!,
-                message = failOrderRequest.message,
-                code = failOrderRequest.code
+
+        applicationEventPublisher.publishEvent(
+            ProductStockRollbackEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = orderId,
+                products = productMap,
+                idempotencyKey = order.orderNo
             )
         )
+    }
 
+    @Transactional
+    override fun failOrder(orderId: Long): Boolean {
+        // 1. 주문 찾기 & 상태검증
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+
+        // 2. 주문상태변경
+        order.fail(timeProvider)
         return true
     }
+
+//    @Transactional
+//    override fun failOrder(failOrderRequest: FailOrderRequest): Boolean {
+//        // 1. 주문 찾기 & 상태검증
+//        val order = orderRepository.findByOrderNo(failOrderRequest.orderId)
+//            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+//
+//        // 2. 주문상태변경
+//        order.fail(timeProvider)
+//
+//        paymentServiceClient.fail(
+//            FailPaymentRequest(
+//                orderId = order.id!!,
+//                paymentId = order.paymentId!!,
+//                message = failOrderRequest.message,
+//                code = failOrderRequest.code
+//            )
+//        )
+//
+//        return true
+//    }
 
 
     override fun getOrders(
@@ -404,7 +448,10 @@ class OrderServiceImpl(
         requestedMap.forEach { (productId, orderItem) ->
             val product = productMap[productId]!!
             if (product.stock < orderItem.quantity) {
-                throw ApplicationException(NOT_ENOUGH_STOCK, "재고 부족 productId: $productId, 요청수량: ${orderItem.quantity}, 재고: ${product.stock}")
+                throw ApplicationException(
+                    NOT_ENOUGH_STOCK,
+                    "재고 부족 productId: $productId, 요청수량: ${orderItem.quantity}, 재고: ${product.stock}"
+                )
             }
         }
     }
@@ -418,8 +465,118 @@ class OrderServiceImpl(
         }
     }
 
-    private fun decreaseStock(products: List<OrderItem>) {
-        val productStockDecreaseRequests = products.map { ProductStockDecreaseRequest(it.productId, it.quantity) }
-//        productServiceClient.decreaseStock(productStockDecreaseRequests)
+    private fun decreaseStock(
+        orderId: Long,
+        orderNo: String,
+        products: List<OrderItem>) {
+        println("OrderServiceImpl.decreaseStock")
+        val productMap = products.map { ProductStockDecreaseEvent.Product(it.productId, it.quantity) }
+
+        applicationEventPublisher.publishEvent(
+            ProductStockDecreaseEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = orderId,
+                products = productMap,
+                idempotencyKey = orderNo,
+            )
+        )
+
     }
+
+
+    // 기존메서드
+
+//        @Transactional(noRollbackFor = [ApplicationException::class])
+//    override fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse {
+//        println("여기진행합니다. 고고고")
+//        // 1. 주문 찾기 & 상태검증
+//        val order = orderRepository.findByOrderNo(confirmOrderResponse.orderId)
+//            ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
+//
+//        // 이미 결제완료 되었으면 멱등 처리
+//        if (order.status == OrderStatus.CONFIRMED) {
+//            log.info("멱등처리. 이미 결제 완료된 주문 : order = $order")
+//            return ConfirmOrderResponse(
+//                success = true,
+//                orderNo = order.orderNo,
+//                paymentId = order.paymentId,
+//                message = "이미 결제 완료된 주문입니다."
+//            )
+//        }
+//        if (order.status != OrderStatus.CREATED) {
+//            return ConfirmOrderResponse(
+//                success = false,
+//                orderNo = order.orderNo,
+//                message = "결제가 가능한 상태가 아닙니다. [status=${order.status}]"
+//            )
+//        }
+//
+//        if (order.price != confirmOrderResponse.amount) {
+//            log.error("결제 금액 불일치: expected=${order.price}, actual=${confirmOrderResponse.amount}, paymentConfirmResponse = $order")
+//            return ConfirmOrderResponse(
+//                success = false,
+//                orderNo = order.orderNo,
+//                message = "결제 금액 불일치: expected=${order.price}, actual=${confirmOrderResponse.amount}"
+//            )
+//        }
+//
+//        // 3) 재고 차감 (부분 실패 시 여기서 예외 발생 가정)
+//        try {
+//            val orderItems = orderItemRepository.findAllByOrderId(order.id!!)
+//            decreaseStock(orderItems)
+//        } catch (e: ApplicationException) {
+//            log.error("재고차감실패! paymentId=${order.paymentId}, error=${e.message}")
+//            // 4) 보상 트랜잭션: 결제 취소 시도
+//            try {
+//                paymentServiceClient.cancel(
+//                    paymentId = order.paymentId!!,
+//                    paymentCancelRequest = PaymentCancelRequest(refundReason = "재고 차감 실패: ${e.message}")
+//                )
+//            } catch (cancelException: ApplicationException) {
+//                log.error("결제 취소 실패(수동 보상 필요) orderId=${order.id}, reason=${cancelException.getMessage}")
+//                throw ApplicationException(cancelException.errorCode, cancelException.getMessage)
+//            }
+//
+//            order.fail(timeProvider)
+//            orderRepository.save(order)
+//            return ConfirmOrderResponse(
+//                success = false,
+//                orderNo = order.orderNo,
+//                message = "재고 차감 실패로 결제 취소됨"
+//            )
+//        }
+//
+//        // 결제 확정
+//        try {
+//            paymentServiceClient.confirm(
+//                ConfirmPaymentRequest(
+//                    orderId = order.id!!,
+//                    orderNo = order.orderNo,
+//                    paymentId = order.paymentId!!,
+//                    paymentKey = confirmOrderResponse.paymentKey,
+//                    amount = confirmOrderResponse.amount,
+//                )
+//            )
+//        } catch (e: ApplicationException) {
+//            order.fail(timeProvider)
+//            orderRepository.save(order)
+//            log.error("paymentService 통신 중 오류발생 - paymentId=${order.paymentId}, error=${e.message}")
+//            return ConfirmOrderResponse(
+//                success = false,
+//                orderNo = order.orderNo,
+//                message = "결제서비스 통신 오류: ${e.message}"
+//            )
+//        }
+//
+//        // 5) 최종 주문 확정
+//        order.confirm(timeProvider)
+//        orderRepository.save(order)
+//
+//        return ConfirmOrderResponse(
+//            success = true,
+//            orderNo = order.orderNo,
+//            paymentId = order.paymentId,
+//            message = "결제/주문 확정 완료"
+//        )
+//    }
 }

@@ -14,8 +14,43 @@ function PaymentSuccess() {
       paymentKey: urlParams.get("paymentKey"),
     };
 
-    async function confirm() {
+  //   async function confirm() {
+  //     try {
+  //       const response = await fetch("http://localhost:8082/api/orders/confirm", {
+  //         method: "PATCH",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //         body: JSON.stringify(requestData),
+  //       });
+  //
+  //       const json = await response.json();
+  //
+  //       if (!response.ok) {
+  //         setStatus('failed');
+  //         setMessage(json.message || '주문 처리 중 오류가 발생했습니다.');
+  //         return;
+  //       }
+  //
+  //       if (json.success) {
+  //         setStatus('success');
+  //         setMessage('주문이 성공적으로 완료되었습니다.');
+  //       } else {
+  //         setStatus('failed');
+  //         setMessage(json.message || '주문 처리에 실패했습니다.');
+  //       }
+  //     } catch (error) {
+  //       setStatus('failed');
+  //       setMessage('네트워크 오류가 발생했습니다.');
+  //     }
+  //   }
+  //
+  //   confirm();
+  // }, []);
+
+    async function confirmPayment() {
       try {
+        // 1단계: 결제 확정 요청 (비동기 시작)
         const response = await fetch("http://localhost:8082/api/orders/confirm", {
           method: "PATCH",
           headers: {
@@ -24,29 +59,161 @@ function PaymentSuccess() {
           body: JSON.stringify(requestData),
         });
 
-        const json = await response.json();
-
         if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
           setStatus('failed');
-          setMessage(json.message || '주문 처리 중 오류가 발생했습니다.');
+          setMessage(errorData.message || '결제 확정 요청 실패');
           return;
         }
 
-        if (json.success) {
+        const confirmResponse = await response.json();
+
+        // 요청이 성공적으로 접수되었다면 폴링 시작
+        if (confirmResponse.success) {
+          // 2단계: 결제 처리 완료까지 폴링
+          const finalResult = await pollConfirmStatus(requestData.orderId);
+
+          // 최종 결과 처리
           setStatus('success');
           setMessage('주문이 성공적으로 완료되었습니다.');
         } else {
           setStatus('failed');
-          setMessage(json.message || '주문 처리에 실패했습니다.');
+          setMessage(confirmResponse.message || '결제 확정 요청이 거부되었습니다.');
         }
+
       } catch (error) {
+        console.error('결제 확정 처리 중 오류:', error);
         setStatus('failed');
         setMessage('네트워크 오류가 발생했습니다.');
       }
     }
 
-    confirm();
+    confirmPayment();
   }, []);
+
+// 결제 확정 상태 폴링 함수
+  async function pollConfirmStatus(orderNo) {
+    const maxAttempts = 60; // 60초 대기 (결제 확정은 시간이 더 걸릴 수 있음)
+    let attempts = 0;
+
+    // 로딩 UI 표시
+    showLoadingMessage('결제를 처리하고 있습니다...');
+
+    while (attempts < maxAttempts) {
+      try {
+        const statusRes = await fetch(`http://localhost:8082/api/orders/${orderNo}/status`);
+        if (!statusRes.ok) {
+          throw new Error('주문 상태 조회 실패');
+        }
+
+        const statusData = await statusRes.json();
+        console.log(`결제 확정 폴링 ${attempts + 1}회차:`, statusData);
+
+        // 현재는 임시로 기존 상태 체크 (백엔드 작업하면서 새로운 상태들로 업데이트 예정)
+        if (statusData.status === "PREPARED") {
+          // 아직 처리 중 - 계속 폴링
+          updateLoadingMessage('재고 차감 및 결제 처리 중...');
+        }
+        else if (statusData.status === "CONFIRMED") {
+          // 결제 완료
+          hideLoadingMessage();
+          return {
+            orderId: statusData.orderNo || orderNo,
+            paymentId: statusData.paymentId,
+            message: '결제가 성공적으로 완료되었습니다.'
+          };
+        }
+        else if (statusData.status === "PAYMENT_FAILED" ||
+          statusData.status === "FAIL" ||
+          statusData.errorMessage) {
+          // 결제 실패
+          hideLoadingMessage();
+          throw new Error(statusData.errorMessage || '결제 처리에 실패했습니다.');
+        }
+        else {
+          // 기타 처리 중 상태
+          updateLoadingMessage('결제 처리 중입니다...');
+        }
+
+        // 1초 후 재시도
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+
+      } catch (e) {
+        hideLoadingMessage();
+        console.error('결제 확정 상태 조회 중 오류:', e);
+        throw e;
+      }
+    }
+
+    // 타임아웃
+    hideLoadingMessage();
+    throw new Error('결제 처리 시간이 초과되었습니다. 잠시 후 다시 확인해주세요.');
+  }
+
+// 로딩 메시지 업데이트 함수 (기존 로딩창의 메시지만 변경)
+  function updateLoadingMessage(message) {
+    const loadingDiv = document.getElementById('payment-loading');
+    if (loadingDiv) {
+      const messageDiv = loadingDiv.querySelector('.loading-message');
+      if (messageDiv) {
+        messageDiv.textContent = message;
+      }
+    }
+  }
+
+// 로딩 UI 표시 함수
+  function showLoadingMessage(message) {
+    // 기존 로딩창이 있으면 제거
+    hideLoadingMessage();
+
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'payment-loading';
+    loadingDiv.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    z-index: 9999;
+    text-align: center;
+    min-width: 300px;
+  `;
+
+    loadingDiv.innerHTML = `
+    <div style="margin-bottom: 15px;">
+      <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+    </div>
+    <div class="loading-message" style="font-size: 16px; color: #333; font-weight: 500;">${message}</div>
+    <div style="margin-top: 10px; font-size: 12px; color: #666;">잠시만 기다려주세요...</div>
+  `;
+
+    // 스피너 애니메이션 CSS 추가
+    if (!document.querySelector('#payment-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'payment-spinner-style';
+      style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(loadingDiv);
+  }
+
+// 로딩 UI 숨기기 함수
+  function hideLoadingMessage() {
+    const loadingDiv = document.getElementById('payment-loading');
+    if (loadingDiv) {
+      loadingDiv.remove();
+    }
+  }
 
   // 로딩 스피너 컴포넌트
   const LoadingSpinner = () => (

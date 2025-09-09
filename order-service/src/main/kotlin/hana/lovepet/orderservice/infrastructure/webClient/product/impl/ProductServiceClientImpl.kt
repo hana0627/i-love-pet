@@ -3,7 +3,7 @@
 //import hana.lovepet.orderservice.common.exception.ApplicationException
 //import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 //import hana.lovepet.orderservice.infrastructure.webClient.product.ProductServiceClient
-//import hana.lovepet.orderservice.infrastructure.webClient.product.dto.request.ProductStockDecreaseRequest
+//import hana.lovepet.orderservice.infrastructure.kafka.out.dto.ProductStockDecreaseRequest
 //import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductInformationResponse
 //import hana.lovepet.orderservice.infrastructure.webClient.product.dto.response.ProductStockDecreaseResponse
 //import org.springframework.http.MediaType.APPLICATION_JSON

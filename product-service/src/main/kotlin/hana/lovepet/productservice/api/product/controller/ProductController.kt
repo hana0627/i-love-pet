@@ -41,11 +41,11 @@ class ProductController(
 //        return ResponseEntity.ok(response)
 //    }
 
-    @PatchMapping("/decrease-stock")
-    fun decreaseStock(@RequestBody productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ResponseEntity<ProductStockDecreaseResponse> {
-        val response = productService.decreaseStock(productStockDecreaseRequests)
-        return ResponseEntity.ok(response)
-    }
+//    @PatchMapping("/decrease-stock")
+//    fun decreaseStock(@RequestBody productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ResponseEntity<ProductStockDecreaseResponse> {
+//        val response = productService.decreaseStock(productStockDecreaseRequests)
+//        return ResponseEntity.ok(response)
+//    }
 
 //    @GetMapping("/{productId}/stock")
 //    fun getStock(@PathVariable("productId") productId: Long): ResponseEntity<Int> {

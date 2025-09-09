@@ -263,7 +263,7 @@ function OrderCreate() {
         if(statusData.status =="CREATED" || statusData.status =="VALIDATING") {
 
         }
-        else if(statusData.status =="CONFIRMED") {
+        else if(statusData.status =="PREPARED") {
           hideLoadingMessage();
           return {
             orderId: statusData.orderNo || orderNo,
