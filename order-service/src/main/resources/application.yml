@@ -14,6 +14,12 @@ spring:
       hibernate:
         format_sql: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}      # Docker에서 redis, 로컬에서 localhost
+      port: ${REDIS_PORT:6379}           # 기본 Redis 포트
+      timeout: 2000ms                    # 2초 연결 타임아웃
+
   kafka:
     bootstrap-servers: kafka:29092     # 컨테이너 내부에서 접속
     producer:

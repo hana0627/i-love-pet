@@ -69,6 +69,18 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine              # 더 가벼운 alpine 버전 사용
+    restart: always                    # 자동 재시작 추가
+    command: redis-server --appendonly yes  # AOF 영속성 활성화
+    volumes:
+      - redis_data:/data               # 데이터 영속화
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]  # Redis 핑 테스트
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   zookeeper:
     # confluent 이미지 사용
@@ -167,12 +179,16 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       MYSQL_URL: ${USER_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
   product-service:
     build:
@@ -184,12 +200,16 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8081:8080"
     environment:
       MYSQL_URL: ${PRODUCT_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
   order-service:
     build:
@@ -201,12 +221,16 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8082:8080"
     environment:
       MYSQL_URL: ${ORDER_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
   payment-service:
     build:
@@ -218,12 +242,16 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8083:8080"
     environment:
       MYSQL_URL: ${PAYMENT_MYSQL_URL}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
 # 아래는 '이름 있는 볼륨' 정의.
 # 도커가 호스트 디스크에 실제 경로를 생성/관리하며, 컨테이너 생명주기와 분리된 영속 스토리지를 제공.
@@ -231,3 +259,4 @@ volumes:
   zk_data:
   zk_txn:
   kafka_data_1:
+  redis_data:
