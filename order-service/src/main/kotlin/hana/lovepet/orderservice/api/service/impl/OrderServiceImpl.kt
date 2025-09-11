@@ -56,7 +56,7 @@ class OrderServiceImpl(
     private val orderEventPublisher: OrderEventPublisher,
     private val applicationEventPublisher: ApplicationEventPublisher,
 
-    private val orderCacheRepository: OrderCacheRepository
+    private val orderCacheRepository: OrderCacheRepository,
 ) : OrderService {
     val log: Logger = LoggerFactory.getLogger(OrderServiceImpl::class.java)
 
@@ -194,8 +194,23 @@ class OrderServiceImpl(
         val order = orderRepository.findByOrderNo(orderNo)
             ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
 
+        if (order.price == null) {
+            return OrderStatusResponse(
+                orderNo = order.orderNo,
+                status = OrderStatus.VALIDATING,
+                amount = null,
+                errorMessage = order.description
+            )
+        }
 
         return when (order.status) {
+            OrderStatus.PREPARED -> OrderStatusResponse(
+                orderNo = order.orderNo,
+                status = order.status,
+                amount = order.price,
+                errorMessage = null,
+            )
+
             OrderStatus.CONFIRMED -> OrderStatusResponse(
                 orderNo = order.orderNo,
                 status = order.status,
@@ -512,7 +527,8 @@ class OrderServiceImpl(
     private fun decreaseStock(
         orderId: Long,
         orderNo: String,
-        products: List<OrderItem>) {
+        products: List<OrderItem>,
+    ) {
         println("OrderServiceImpl.decreaseStock")
         val productMap = products.map { ProductStockDecreaseEvent.Product(it.productId, it.quantity) }
 

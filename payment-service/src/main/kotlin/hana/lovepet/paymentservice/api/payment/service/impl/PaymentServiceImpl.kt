@@ -65,11 +65,6 @@ class PaymentServiceImpl(
             )
         }
 
-        // TODO 테스트용 실패
-        if (amount == 999L) {
-            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "테스트용 결제 준비 실패")
-        }
-
         // 1. 임시 Payment키 생성
         val tempPaymentKey = uuidGenerator.generate()
         // 2. Payment 초기 엔티티 생성
@@ -112,6 +107,12 @@ class PaymentServiceImpl(
     override fun confirmPayment(orderId: Long, paymentId: Long, orderNo: String, paymentKey: String, amount: Long): ConfirmPaymentResponse {
         val payment = paymentRepository.findById(paymentId)
             .orElseThrow{ ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, ErrorCode.PAYMENT_NOT_FOUND.message) }
+
+
+        // TODO 테스트용 실패
+        if (amount == 999L) {
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "테스트용 결제 준비 실패 -- PG결제이전")
+        }
 
         // 결제확정 API 호출
         val tossResponse = try {
@@ -186,6 +187,12 @@ class PaymentServiceImpl(
         paymentRepository.save(payment)
         paymentLogRepository.save(paymentLog)
 
+
+
+        // TODO 테스트용 실패
+        if (amount == 888L) {
+            throw ApplicationException(ErrorCode.UNHEALTHY_SERVER_COMMUNICATION, "테스트용 결제 준비 실패 -- PG결제이후")
+        }
         // 이벤트 발행
         applicationEventPublisher.publishEvent(
             PaymentConfirmedEvent(

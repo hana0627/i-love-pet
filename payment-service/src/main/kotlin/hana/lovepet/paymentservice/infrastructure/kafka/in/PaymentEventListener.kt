@@ -151,7 +151,7 @@ class PaymentEventListener(
 
                 Topics.PAYMENT_PENDING + "-dlt" -> {
                     val failEvent = om.readValue(record.value(), PaymentPendingEvent::class.java)
-                    paymentService.failPayment(failEvent.orderId, "결제 확정 실패 orderId: ${failEvent.orderId}")
+                    paymentService.failPayment(failEvent.paymentId, "결제 확정 실패 orderId: ${failEvent.orderId}")
                     paymentEventPublisher.publishPaymentConfirmedFail(
                         PaymentConfirmedFailEvent(
                             eventId = UUID.randomUUID().toString(),

@@ -51,21 +51,21 @@ class PaymentController(
     /**
      * 결제 취소
      */
-    @PatchMapping("/{paymentId}/cancel")
-    fun cancelPayment(@PathVariable("paymentId") paymentId: Long, @RequestBody paymentCancelRequest: PaymentCancelRequest): ResponseEntity<PaymentCancelResponse> {
-        val response = paymentService.cancelPayment(paymentId, paymentCancelRequest)
-        return ResponseEntity.ok(response)
-    }
+//    @PatchMapping("/{paymentId}/cancel")
+//    fun cancelPayment(@PathVariable("paymentId") paymentId: Long, @RequestBody paymentCancelRequest: PaymentCancelRequest): ResponseEntity<PaymentCancelResponse> {
+//        val response = paymentService.cancelPayment(paymentId, paymentCancelRequest)
+//        return ResponseEntity.ok(response)
+//    }
 
 
-    @PatchMapping("/{paymentId}/fail")
-    fun failPayment(
-        @PathVariable("paymentId") paymentId: Long,
-        @RequestBody failPaymentRequest: FailPaymentRequest
-    ): ResponseEntity<Boolean> {
-        val response = paymentService.failPayment(paymentId, failPaymentRequest)
-        return ResponseEntity.status(HttpStatus.OK).body(response)
-    }
+//    @PatchMapping("/{paymentId}/fail")
+//    fun failPayment(
+//        @PathVariable("paymentId") paymentId: Long,
+//        @RequestBody failPaymentRequest: FailPaymentRequest
+//    ): ResponseEntity<Boolean> {
+//        val response = paymentService.failPayment(paymentId, failPaymentRequest)
+//        return ResponseEntity.status(HttpStatus.OK).body(response)
+//    }
 
 
     /**
