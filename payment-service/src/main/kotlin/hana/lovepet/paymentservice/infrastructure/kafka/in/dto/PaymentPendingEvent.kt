@@ -1,4 +1,4 @@
-package hana.lovepet.orderservice.infrastructure.kafka.out.dto
+package hana.lovepet.paymentservice.infrastructure.kafka.`in`.dto
 
 data class PaymentPendingEvent(
     val eventId: String,

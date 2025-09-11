@@ -1,4 +1,4 @@
-package hana.lovepet.orderservice.infrastructure.kafka.out.dto
+package hana.lovepet.paymentservice.infrastructure.kafka.`in`.dto
 
 data class PaymentCancelEvent(
     val eventId: String,
@@ -6,6 +6,6 @@ data class PaymentCancelEvent(
     val orderNo: String,
     val paymentId: Long,
     val refundReason: String,
-    val idempotencyKey: String,
+    val idempotencyKey: String
 ) {
 }

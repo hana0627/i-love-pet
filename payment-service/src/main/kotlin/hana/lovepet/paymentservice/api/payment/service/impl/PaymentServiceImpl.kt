@@ -1,10 +1,7 @@
 package hana.lovepet.paymentservice.api.payment.service.impl
 
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.ConfirmPaymentRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.FailPaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.ConfirmPaymentResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
@@ -14,6 +11,7 @@ import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRe
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 import hana.lovepet.paymentservice.api.payment.domain.Payment
 import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
+import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
 import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus.*
 import hana.lovepet.paymentservice.api.payment.repository.PaymentLogRepository
 import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
@@ -22,12 +20,13 @@ import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.ApplicationException
 //import hana.lovepet.paymentservice.common.exception.PgCommunicationException
 import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
-import hana.lovepet.paymentservice.infrastructure.kafka.out.PaymentEventPublisher
+import hana.lovepet.paymentservice.infrastructure.kafka.`in`.dto.PaymentCancelEvent
+import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentCanceledEvent
+import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentConfirmedEvent
 import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentPreparedEvent
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentConfirmRequest
 //import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
-import jakarta.persistence.EntityNotFoundException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -45,7 +44,7 @@ class PaymentServiceImpl(
     private val tossClient: TossClient,
 
 //    private val paymentEventPublisher: PaymentEventPublisher,
-    private val applicationEventPublisher: ApplicationEventPublisher
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) : PaymentService {
 
     private val log: Logger = LoggerFactory.getLogger(PaymentServiceImpl::class.java)
@@ -59,7 +58,7 @@ class PaymentServiceImpl(
     ): PreparePaymentResponse {
         // 0. 멱등처리
         val foundPayment = paymentRepository.findByOrderId(orderId)
-        if(foundPayment != null){
+        if (foundPayment != null) {
             log.warn("이미 결제가 준비된 주문: orderId=$orderId")
             return PreparePaymentResponse(
                 paymentId = foundPayment.id!!,
@@ -110,28 +109,29 @@ class PaymentServiceImpl(
 
 
     @Transactional(noRollbackFor = [ApplicationException::class])
-    override fun confirmPayment(paymentId: Long, confirmPaymentRequest: ConfirmPaymentRequest): ConfirmPaymentResponse {
+    override fun confirmPayment(orderId: Long, paymentId: Long, orderNo: String, paymentKey: String, amount: Long): ConfirmPaymentResponse {
         val payment = paymentRepository.findById(paymentId)
-            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
+            .orElseThrow{ ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, ErrorCode.PAYMENT_NOT_FOUND.message) }
 
         // 결제확정 API 호출
         val tossResponse = try {
             tossClient.confirm(
                 TossPaymentConfirmRequest(
-                    orderId = confirmPaymentRequest.orderNo,
-                    amount = confirmPaymentRequest.amount,
-                    paymentKey = confirmPaymentRequest.paymentKey
+                    orderId = orderNo,
+                    amount = amount,
+                    paymentKey = paymentKey
                 )
             )
         } catch (e: ApplicationException) {
             // 결제 승인 실패 로그 저장
             val paymentLog = PaymentLog.response(
-                paymentId = paymentId,
+                paymentId = payment.id!!,
                 message = "결제 승인 실패: ${e.message}"
             )
+
             payment.fail(
                 timeProvider = timeProvider,
-                paymentKey = confirmPaymentRequest.paymentKey,
+                paymentKey = paymentKey,
                 failReason = e.message
             )
             paymentRepository.save(payment)
@@ -142,12 +142,12 @@ class PaymentServiceImpl(
         if (tossResponse.status != "DONE") {
             val errorMessage = "결제 승인 상태 오류: ${tossResponse.status}"
             val paymentLog = PaymentLog.response(
-                paymentId = paymentId,
+                paymentId = payment.id!!,
                 message = errorMessage
             )
             payment.fail(
                 timeProvider = timeProvider,
-                paymentKey = confirmPaymentRequest.paymentKey,
+                paymentKey = paymentKey,
                 failReason = errorMessage
             )
             paymentRepository.save(payment)
@@ -156,15 +156,15 @@ class PaymentServiceImpl(
         }
 
         // 금액 검증
-        if (tossResponse.totalAmount != confirmPaymentRequest.amount) {
-            val errorMessage = "결제 금액 불일치: expected=${confirmPaymentRequest.amount}, actual=${tossResponse.totalAmount}"
+        if (tossResponse.totalAmount != amount) {
+            val errorMessage = "결제 금액 불일치: expected=${amount}, actual=${tossResponse.totalAmount}"
             val paymentLog = PaymentLog.response(
-                paymentId = paymentId,
+                paymentId = payment.id!!,
                 message = errorMessage
             )
             payment.fail(
                 timeProvider = timeProvider,
-                paymentKey = confirmPaymentRequest.paymentKey,
+                paymentKey = paymentKey,
                 failReason = errorMessage
             )
             paymentRepository.save(payment)
@@ -175,26 +175,36 @@ class PaymentServiceImpl(
 
         payment.approve(
             timeProvider = timeProvider,
-            paymentKey = confirmPaymentRequest.paymentKey
+            paymentKey = paymentKey
         )
 
         val paymentLog = PaymentLog.response(
-            paymentId = paymentId,
+            paymentId = payment.id!!,
             message = "결제 승인 완료: orderId = ${payment.orderId}, tossPaymentKey = ${tossResponse.paymentKey}"
         )
 
         paymentRepository.save(payment)
         paymentLogRepository.save(paymentLog)
 
+        // 이벤트 발행
+        applicationEventPublisher.publishEvent(
+            PaymentConfirmedEvent(
+                eventId = uuidGenerator.generate(),
+                occurredAt = payment.approvedAt!!,
+                orderId = orderId,
+                paymentId = payment.id!!,
+                idempotencyKey = payment.paymentKey,
+            )
+        )
         return ConfirmPaymentResponse(
-            paymentId = paymentId,
+            paymentId = payment.id!!,
         )
     }
 
     @Transactional(noRollbackFor = [ApplicationException::class])
-    override fun cancelPayment(paymentId: Long, paymentCancelRequest: PaymentCancelRequest): PaymentCancelResponse {
-        val payment = paymentRepository.findById(paymentId)
-            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
+    override fun cancelPayment(paymentCancelEvent: PaymentCancelEvent): PaymentCancelResponse {
+        val payment = paymentRepository.findById(paymentCancelEvent.paymentId)
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = ${paymentCancelEvent.paymentId}]") }
 
         // STEP1. 멱등 처리 -- 이미 취소된 건이면 성공요청으로 반환
         if (payment.status == CANCELED) {
@@ -210,13 +220,13 @@ class PaymentServiceImpl(
         paymentLogRepository.save(
             PaymentLog.request(
                 paymentId = payment.id!!,
-                message = "cancel request: reason='${paymentCancelRequest.refundReason}'"
+                message = "cancel request: reason='${paymentCancelEvent.refundReason}'"
             )
         )
 
 
         return try {
-            val tossResponse = tossClient.cancel(payment.paymentKey, paymentCancelRequest.refundReason)
+            val tossResponse = tossClient.cancel(payment.paymentKey, paymentCancelEvent.refundReason)
 
 
             if (tossResponse.status != "CANCELED") {
@@ -224,7 +234,7 @@ class PaymentServiceImpl(
                 val errorMessage = "토스페이먼츠 취소 상태 오류: ${tossResponse.status}"
                 paymentLogRepository.save(
                     PaymentLog.error(
-                        paymentId = paymentId,
+                        paymentId = payment.id!!,
                         message = errorMessage
                     )
                 )
@@ -241,7 +251,7 @@ class PaymentServiceImpl(
                 val errorMessage = "취소 처리 상태 오류: ${latestCancel.cancelStatus}"
                 paymentLogRepository.save(
                     PaymentLog.response(
-                        paymentId = paymentId,
+                        paymentId = payment.id!!,
                         message = errorMessage
                     )
                 )
@@ -250,17 +260,28 @@ class PaymentServiceImpl(
 
             payment.cancel(
                 timeProvider = timeProvider,
-                description = paymentCancelRequest.refundReason
+                description = paymentCancelEvent.refundReason
             )
 
             paymentLogRepository.save(
                 PaymentLog.response(
-                    paymentId = paymentId,
-                    message = "결제 취소 완료: reason='${paymentCancelRequest.refundReason}', transactionKey=${latestCancel.transactionKey}, cancelAmount=${latestCancel.cancelAmount}"
+                    paymentId = payment.id!!,
+                    message = "결제 취소 완료: reason='${paymentCancelEvent.refundReason}', transactionKey=${latestCancel.transactionKey}, cancelAmount=${latestCancel.cancelAmount}"
                 )
             )
+
+            applicationEventPublisher.publishEvent(
+                PaymentCanceledEvent(
+                    eventId = uuidGenerator.generate(),
+                    cancelAt = payment.canceledAt!!,
+                    orderId = paymentCancelEvent.orderId,
+                    paymentId = payment.id!!,
+                    idempotencyKey = payment.paymentKey,
+                )
+            )
+
             return PaymentCancelResponse(
-                paymentId = paymentId,
+                paymentId = payment.id!!,
                 canceledAt = timeProvider.now(),
                 transactionKey = latestCancel.transactionKey,
                 message = "결제 취소 완료"
@@ -270,117 +291,209 @@ class PaymentServiceImpl(
             // STEP9. PG 통신 실패 로그 저장
             paymentLogRepository.save(
                 PaymentLog.response(
-                    paymentId = paymentId,
+                    paymentId = payment.id!!,
                     message = "토스페이먼츠 취소 실패: ${e.message}"
                 )
             )
-            log.error("토스페이먼츠 결제 취소 실패: paymentId=$paymentId, reason=${paymentCancelRequest.refundReason}, error=${e.message}")
+            log.error("토스페이먼츠 결제 취소 실패: paymentId=${payment.id!!}, reason=${paymentCancelEvent.refundReason}, error=${e.message}")
             throw e
         } catch (e: Exception) {
             // STEP10. 기타 예외 처리
             paymentLogRepository.save(
                 PaymentLog.response(
-                    paymentId = paymentId,
+                    paymentId = payment.id!!,
                     message = "결제 취소 중 예외 발생: ${e.message}"
                 )
             )
-            log.error("결제 취소 중 예외 발생: paymentId=$paymentId", e)
+            log.error("결제 취소 중 예외 발생: paymentId=${payment.id!!}", e)
             throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, "결제 취소 중 오류가 발생했습니다.")
         }
     }
 
-override fun getPayment(paymentId: Long): GetPaymentResponse {
-    val payment = paymentRepository.findById(paymentId)
-        .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
+    override fun getPayment(paymentId: Long): GetPaymentResponse {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
-    return when (payment.status) {
-        PENDING -> GetPaymentResponse(
-            paymentId = payment.id!!,
-            status = payment.status,
-            amount = payment.amount,
-            method = payment.method ?: "",
-            occurredAt = payment.requestedAt,
-            description = payment.description ?: "",
-        )
+        return when (payment.status) {
+            PENDING -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.requestedAt,
+                description = payment.description ?: "",
+            )
 
-        SUCCESS -> GetPaymentResponse(
-            paymentId = payment.id!!,
-            status = payment.status,
-            amount = payment.amount,
-            method = payment.method ?: "",
-            occurredAt = payment.approvedAt!!,
-            description = payment.description ?: "",
-        )
+            SUCCESS -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.approvedAt!!,
+                description = payment.description ?: "",
+            )
 
-        FAIL -> GetPaymentResponse(
-            paymentId = payment.id!!,
-            status = payment.status,
-            amount = payment.amount,
-            method = payment.method ?: "",
-            occurredAt = payment.failedAt!!,
-            description = payment.failReason ?: "",
-        )
+            FAIL -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.failedAt!!,
+                description = payment.failReason ?: "",
+            )
 
-        CANCELED -> GetPaymentResponse(
-            paymentId = payment.id!!,
-            status = payment.status,
-            amount = payment.amount,
-            method = payment.method ?: "",
-            occurredAt = payment.canceledAt!!,
-            description = payment.description ?: "",
-        )
+            CANCELED -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.canceledAt!!,
+                description = payment.description ?: "",
+            )
 
-        REFUNDED -> GetPaymentResponse(
-            paymentId = payment.id!!,
-            status = payment.status,
-            amount = payment.amount,
-            method = payment.method ?: "",
-            occurredAt = payment.refundedAt!!,
-            description = payment.description ?: "",
-        )
+            REFUNDED -> GetPaymentResponse(
+                paymentId = payment.id!!,
+                status = payment.status,
+                amount = payment.amount,
+                method = payment.method ?: "",
+                occurredAt = payment.refundedAt!!,
+                description = payment.description ?: "",
+            )
+        }
     }
-}
 
-override fun getPaymentLogs(paymentId: Long): List<GetPaymentLogResponse> {
-    val logs = paymentLogRepository
-        .findAllByPaymentIdOrderByIdDesc(paymentId, PageRequest.of(0, 20))
-    return logs.map {
-        GetPaymentLogResponse(
-            logType = it.logType,
-            message = it.message,
-            createdAt = it.createdAt,
-        )
+    override fun getPaymentLogs(paymentId: Long): List<GetPaymentLogResponse> {
+        val logs = paymentLogRepository
+            .findAllByPaymentIdOrderByIdDesc(paymentId, PageRequest.of(0, 20))
+        return logs.map {
+            GetPaymentLogResponse(
+                logType = it.logType,
+                message = it.message,
+                createdAt = it.createdAt,
+            )
+        }
     }
-}
 
-@Transactional
-override fun failPayment(
-    paymentId: Long,
-    failPaymentRequest: FailPaymentRequest,
-): Boolean {
-    val payment = paymentRepository.findById(paymentId)
-        .orElseThrow {  ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
+    @Transactional
+    override fun failPayment(
+        paymentId: Long,
+        failureReason: String,
+//        failPaymentRequest: FailPaymentRequest,
+    ): Boolean {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
 
-    payment.fail(
-        timeProvider = timeProvider,
-        paymentKey = null,
-        failReason = "code = ${failPaymentRequest.code}, message = ${failPaymentRequest.message}"
-    )
+        payment.fail(
+            timeProvider = timeProvider,
+            paymentKey = null,
+//            failReason = "code = ${failPaymentRequest.code}, message = ${failPaymentRequest.message}"
+            failReason = failureReason
+        )
 
-    val paymentLog = PaymentLog.error(
-        paymentId = paymentId,
-        message = "code = ${failPaymentRequest.code}, message = ${failPaymentRequest.message}"
-    )
+        val paymentLog = PaymentLog.error(
+            paymentId = paymentId,
+//            message = "code = ${failPaymentRequest.code}, message = ${failPaymentRequest.message}"
+            message = failureReason
+        )
 
-    paymentRepository.save(payment)
-    paymentLogRepository.save(paymentLog)
+        paymentRepository.save(payment)
+        paymentLogRepository.save(paymentLog)
 
-    return true
-}
+        return true
+    }
 
 
-override fun refundPayment(paymentId: Long, paymentRefundRequest: PaymentRefundRequest): PaymentRefundResponse {
-    TODO("Not yet implemented")
-}
+    @Transactional(readOnly = true)
+    override fun isPaymentCanceled(paymentId: Long): Boolean {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payment not found") }
+        return payment.status == PaymentStatus.CANCELED
+    }
 
+
+    override fun refundPayment(paymentId: Long, paymentRefundRequest: PaymentRefundRequest): PaymentRefundResponse {
+        TODO("Not yet implemented")
+    }
+
+//    @Transactional(noRollbackFor = [ApplicationException::class])
+//    override fun confirmPayment(paymentId: Long, confirmPaymentRequest: ConfirmPaymentRequest): ConfirmPaymentResponse {
+//        val payment = paymentRepository.findById(paymentId)
+//            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
+//
+//        // 결제확정 API 호출
+//        val tossResponse = try {
+//            tossClient.confirm(
+//                TossPaymentConfirmRequest(
+//                    orderId = confirmPaymentRequest.orderNo,
+//                    amount = confirmPaymentRequest.amount,
+//                    paymentKey = confirmPaymentRequest.paymentKey
+//                )
+//            )
+//        } catch (e: ApplicationException) {
+//            // 결제 승인 실패 로그 저장
+//            val paymentLog = PaymentLog.response(
+//                paymentId = paymentId,
+//                message = "결제 승인 실패: ${e.message}"
+//            )
+//            payment.fail(
+//                timeProvider = timeProvider,
+//                paymentKey = confirmPaymentRequest.paymentKey,
+//                failReason = e.message
+//            )
+//            paymentRepository.save(payment)
+//            paymentLogRepository.save(paymentLog)
+//            throw e
+//        }
+//
+//        if (tossResponse.status != "DONE") {
+//            val errorMessage = "결제 승인 상태 오류: ${tossResponse.status}"
+//            val paymentLog = PaymentLog.response(
+//                paymentId = paymentId,
+//                message = errorMessage
+//            )
+//            payment.fail(
+//                timeProvider = timeProvider,
+//                paymentKey = confirmPaymentRequest.paymentKey,
+//                failReason = errorMessage
+//            )
+//            paymentRepository.save(payment)
+//            paymentLogRepository.save(paymentLog)
+//            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
+//        }
+//
+//        // 금액 검증
+//        if (tossResponse.totalAmount != confirmPaymentRequest.amount) {
+//            val errorMessage = "결제 금액 불일치: expected=${confirmPaymentRequest.amount}, actual=${tossResponse.totalAmount}"
+//            val paymentLog = PaymentLog.response(
+//                paymentId = paymentId,
+//                message = errorMessage
+//            )
+//            payment.fail(
+//                timeProvider = timeProvider,
+//                paymentKey = confirmPaymentRequest.paymentKey,
+//                failReason = errorMessage
+//            )
+//            paymentRepository.save(payment)
+//            paymentLogRepository.save(paymentLog)
+//            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
+//        }
+//
+//
+//        payment.approve(
+//            timeProvider = timeProvider,
+//            paymentKey = confirmPaymentRequest.paymentKey
+//        )
+//
+//        val paymentLog = PaymentLog.response(
+//            paymentId = paymentId,
+//            message = "결제 승인 완료: orderId = ${payment.orderId}, tossPaymentKey = ${tossResponse.paymentKey}"
+//        )
+//
+//        paymentRepository.save(payment)
+//        paymentLogRepository.save(paymentLog)
+//
+//        return ConfirmPaymentResponse(
+//            paymentId = paymentId,
+//        )
+//    }
 }

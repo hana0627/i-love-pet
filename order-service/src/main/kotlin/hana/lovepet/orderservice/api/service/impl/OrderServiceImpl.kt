@@ -281,7 +281,9 @@ class OrderServiceImpl(
         applicationEventPublisher.publishEvent(
             PaymentPendingEvent(
                 eventId = UUID.randomUUID().toString(),
+                paymentId = order.paymentId!!,
                 orderId = orderId,
+                orderNo = order.orderNo,
                 paymentKey = paymentKey,
                 amount = order.price,
                 idempotencyKey = paymentKey
@@ -295,15 +297,14 @@ class OrderServiceImpl(
             .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
         order.updateStatus(OrderStatus.DECREASE_STOCK_FAIL, timeProvider)
 
-        val paymentKey = orderCacheRepository.findPaymentKeyByOrderId(order.id!!)
-            ?: throw ApplicationException(PAYMENT_KEY_EXPIRED, "PaymentKey 만료 또는 누락")
-
         applicationEventPublisher.publishEvent(
             PaymentCancelEvent(
                 eventId = UUID.randomUUID().toString(),
-                orderId = orderId,
-                paymentKey = paymentKey,
-                idempotencyKey = paymentKey
+                orderId = order.id!!,
+                orderNo = order.orderNo,
+                paymentId = order.paymentId!!,
+                refundReason = "재고차감실패: orderId: $orderId",
+                idempotencyKey = order.orderNo,
             )
         )
     }

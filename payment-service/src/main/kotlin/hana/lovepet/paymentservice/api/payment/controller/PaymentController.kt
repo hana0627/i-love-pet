@@ -39,14 +39,14 @@ class PaymentController(
 //        return ResponseEntity.status(HttpStatus.CREATED).body(response)
 //    }
 
-    @PatchMapping("/{paymentId}/confirm")
-    fun confirmPayment(
-        @PathVariable("paymentId") paymentId: Long,
-        @RequestBody confirmPaymentRequest: ConfirmPaymentRequest
-    ): ResponseEntity<ConfirmPaymentResponse> {
-        val response = paymentService.confirmPayment(paymentId, confirmPaymentRequest)
-        return ResponseEntity.status(HttpStatus.CREATED).body(response)
-    }
+//    @PatchMapping("/{paymentId}/confirm")
+//    fun confirmPayment(
+//        @PathVariable("paymentId") paymentId: Long,
+//        @RequestBody confirmPaymentRequest: ConfirmPaymentRequest
+//    ): ResponseEntity<ConfirmPaymentResponse> {
+//        val response = paymentService.confirmPayment(paymentId, confirmPaymentRequest)
+//        return ResponseEntity.status(HttpStatus.CREATED).body(response)
+//    }
 
     /**
      * 결제 취소

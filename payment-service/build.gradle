@@ -40,6 +40,10 @@ dependencies {
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
 	//kafka - end
 
+	// redis - start
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// redid - end
+
 }
 
 kotlin {
