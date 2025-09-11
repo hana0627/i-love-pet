@@ -100,7 +100,7 @@ class Order (
         if(this.status != CREATED){
             throw ApplicationException(ErrorCode.ILLEGALSTATE, "CREATED인 상품만 FAIL이 가능합니다.")
         }
-        this.status = FAIL
+        this.status = PAYMENT_FAILED
         this.updatedAt = timeProvider.now()
     }
 
@@ -120,4 +120,7 @@ class Order (
         this.paymentId = paymentId
     }
 
+    fun updateDescription(description: String) {
+        this.description = description
+    }
 }

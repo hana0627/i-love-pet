@@ -5,6 +5,10 @@ import hana.lovepet.orderservice.api.service.OrderService
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.infrastructure.kafka.Groups
 import hana.lovepet.orderservice.infrastructure.kafka.Topics
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentCanceledEvent
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentCanceledFailEvent
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentConfirmedEvent
+import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentConfirmedFailEvent
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentPrepareFailEvent
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.PaymentPreparedEvent
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductStockDecreasedEvent
@@ -85,7 +89,6 @@ class OrderEventListener(
         }
     }
 
-    // TODO DLQ 처리. 근데 이거 실패할 가능성이.. 있나...
     @KafkaListener(topics = [Topics.PAYMENT_PREPARED], groupId = Groups.ORDER)
     fun onPreparedRequest(
         record: ConsumerRecord<String, String>,
@@ -138,6 +141,112 @@ class OrderEventListener(
     }
 
 
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
+    @KafkaListener(topics = [Topics.PAYMENT_CONFIRMED], groupId = Groups.ORDER)
+    fun onPaymentConfirmed(
+        record: ConsumerRecord<String, String>,
+        ack: Acknowledgment,
+    ) {
+        val messages = record.value()
+        try {
+            val readValue = om.readValue(messages, PaymentConfirmedEvent::class.java)
+            val result = orderService.confirmedOrder(readValue.orderId)
+            log.info("payment confirmed. orderId={}, paymentId={}", readValue.orderId)
+            ack.acknowledge()
+        } catch (e: Exception) {
+            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+//            ack.acknowledge()
+            throw e
+        }
+    }
+
+
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
+    @KafkaListener(topics = [Topics.PAYMENT_CONFIRMED_FAIL], groupId = Groups.ORDER)
+    fun onPaymentConfirmedFail(
+        record: ConsumerRecord<String, String>,
+        ack: Acknowledgment,
+    ) {
+        val messages = record.value()
+        try {
+            val readValue = om.readValue(messages, PaymentConfirmedFailEvent::class.java)
+            val result = orderService.failOrder(readValue.orderId)
+            ack.acknowledge()
+        } catch (e: Exception) {
+            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+//            ack.acknowledge()
+            throw e
+        }
+    }
+
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
+    @KafkaListener(topics = [Topics.PAYMENT_CANCELED], groupId = Groups.ORDER)
+    fun onPaymentCanceled(
+        record: ConsumerRecord<String, String>,
+        ack: Acknowledgment,
+    ) {
+        val messages = record.value()
+        try {
+            val readValue = om.readValue(messages, PaymentCanceledEvent::class.java)
+            val result = orderService.canceledOrder(readValue.orderId)
+            ack.acknowledge()
+        } catch (e: Exception) {
+            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+//            ack.acknowledge()
+            throw e
+        }
+    }
+
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
+    @KafkaListener(topics = [Topics.PAYMENT_CANCELED_FAIL], groupId = Groups.ORDER)
+    fun onPaymentCanceledFail(
+        record: ConsumerRecord<String, String>,
+        ack: Acknowledgment,
+    ) {
+        val messages = record.value()
+        try {
+            val readValue = om.readValue(messages, PaymentCanceledFailEvent::class.java)
+            val result = orderService.canceledFailOrder(readValue.orderId)
+            ack.acknowledge()
+        } catch (e: Exception) {
+            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+//            ack.acknowledge()
+            throw e
+        }
+    }
+
+
+
+
+
     @DltHandler
     fun handleDeadLetterTopic(
         record: ConsumerRecord<String, String>,
@@ -152,16 +261,15 @@ class OrderEventListener(
                     orderService.orderProcessFail(failedEvent.orderId)
                     log.error("상품 정보 응답 처리 실패: orderId={}", failedEvent.orderId)
                 }
-                Topics.PAYMENT_PREPARE_FAIL + "dlt" -> {
+                Topics.PAYMENT_PREPARE_FAIL + "-dlt" -> {
                     val failedEvent = om.readValue(record.value(), PaymentPrepareFailEvent::class.java)
                     // 단순로깅
                     log.error("결제 준비 실패 메시지 처리도 실패: orderId={}", failedEvent.orderId)
                 }
-                // 이경우의 예외는 발생하지 않는다고 가정
-                // "payment.prepared-dlt" -> {
-                //     val failedEvent = om.readValue(record.value(), PaymentPreparedEvent::class.java)
-                //     orderService.paymentProcessFail(failedEvent.orderId)
-                // }
+                 Topics.PAYMENT_PREPARED +"-dlt" -> {
+                     val failedEvent = om.readValue(record.value(), PaymentPreparedEvent::class.java)
+                     log.error("결제 준비 실패: orderId={}", failedEvent.orderId)
+                 }
                 Topics.PRODUCT_STOCK_DECREASED + "-dlt" -> {
                     val failedEvent = om.readValue(record.value(), ProductStockDecreasedEvent::class.java)
 
@@ -175,6 +283,27 @@ class OrderEventListener(
                         orderService.failOrder(failedEvent.orderId)
                     }
                 }
+                Topics.PAYMENT_CONFIRMED+"-dlt" -> {
+                    val failedEvent = om.readValue(record.value(), PaymentConfirmedEvent::class.java)
+                    log.error("결제완료 처리 실패: orderId={}", failedEvent.orderId)
+                }
+                Topics.PAYMENT_CONFIRMED_FAIL+"-dlt" -> {
+                    val failedEvent = om.readValue(record.value(), PaymentConfirmedFailEvent::class.java)
+                    log.error("결제실패 후 처리 실패: orderId={}", failedEvent.orderId)
+                }
+
+                Topics.PAYMENT_CANCELED+"-dlt" -> {
+                    val failedEvent = om.readValue(record.value(), PaymentCanceledEvent::class.java)
+                    log.error("결제취소 후 처리 실패: orderId={}", failedEvent.orderId)
+                }
+
+
+                Topics.PAYMENT_CANCELED_FAIL+"-dlt" -> {
+                    val failedEvent = om.readValue(record.value(), PaymentCanceledFailEvent::class.java)
+                    log.error("결제취소실패 후 처리 실패: orderId={}", failedEvent.orderId)
+                }
+
+
                 else -> {
                     log.error("알 수 없는 DLT 토픽: {}", record.topic())
                 }

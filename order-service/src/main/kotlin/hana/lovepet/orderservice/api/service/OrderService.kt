@@ -27,9 +27,12 @@ interface OrderService {
     fun processOrder(orderId: Long)
     fun decreaseStockFail(orderId: Long)
     fun rollbackStockAndCancel(orderId: Long)
+    fun confirmedOrder(orderId: Long)
+    fun failOrder(orderId: Long): Boolean
+    fun canceledOrder(orderId: Long)
+    fun canceledFailOrder(orderId: Long)
     //    fun createOrder(createOrderRequest: CreateOrderRequest): OrderCreateResponse
     fun getOrders(orderSearchCondition: OrderSearchCondition, pageable: Pageable): Page<GetOrdersResponse>
     fun getOrderItems(orderNo: String): List<GetOrderItemsResponse>
 //    fun failOrder(failOrderRequest: FailOrderRequest): Boolean
-    fun failOrder(orderId: Long): Boolean
 }

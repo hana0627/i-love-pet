@@ -218,7 +218,6 @@ class OrderServiceImpl(
      */
     @Transactional
     override fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse {
-        println("여기진행합니다. 고고고")
         // 1. 주문 찾기 & 상태검증
         val order = orderRepository.findByOrderNo(confirmOrderResponse.orderId)
             ?: throw ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message)
@@ -334,14 +333,58 @@ class OrderServiceImpl(
     }
 
     @Transactional
+    override fun confirmedOrder(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+
+        order.updateStatus(OrderStatus.CONFIRMED, timeProvider)
+
+        orderRepository.save(order)
+
+    }
+
+    @Transactional
     override fun failOrder(orderId: Long): Boolean {
         // 1. 주문 찾기 & 상태검증
         val order = orderRepository.findById(orderId)
             .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+        val orderItems = orderItemRepository.findAllByOrderId(orderId)
+
+        val productMap = orderItems.map { ProductStockRollbackEvent.Product(it.productId, it.quantity) }
 
         // 2. 주문상태변경
-        order.fail(timeProvider)
+        order.updateStatus(OrderStatus.PAYMENT_FAILED, timeProvider)
+
+        applicationEventPublisher.publishEvent(
+            ProductStockRollbackEvent(
+                eventId = UUID.randomUUID().toString(),
+                orderId = order.id!!,
+                products = productMap,
+                idempotencyKey = order.orderNo,
+            )
+        )
         return true
+    }
+
+    @Transactional
+    override fun canceledOrder(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+
+        order.updateStatus(OrderStatus.CANCELED, timeProvider)
+
+        orderRepository.save(order)
+    }
+
+    @Transactional
+    override fun canceledFailOrder(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            .orElseThrow { ApplicationException(ORDER_NOT_FOUND, ORDER_NOT_FOUND.message) }
+
+        order.updateStatus(OrderStatus.FAIL, timeProvider)
+        order.updateDescription("결제 취소 실패 - 수동 개입 필요 (결제 상태 확인 후 처리)")
+
+        orderRepository.save(order)
     }
 
 //    @Transactional
