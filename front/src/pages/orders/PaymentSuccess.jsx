@@ -109,13 +109,28 @@ function PaymentSuccess() {
         const statusData = await statusRes.json();
         console.log(`결제 확정 폴링 ${attempts + 1}회차:`, statusData);
 
-        // 현재는 임시로 기존 상태 체크 (백엔드 작업하면서 새로운 상태들로 업데이트 예정)
-        if (statusData.status === "PREPARED") {
-          // 아직 처리 중 - 계속 폴링
-          updateLoadingMessage('재고 차감 및 결제 처리 중...');
+        // 🟢 계속 폴링해야 하는 상태 (처리 중)
+        if (statusData.status === "PREPARED" ||
+          statusData.status === "DECREASE_STOCK" ||
+          statusData.status === "PAYMENT_PENDING") {
+
+          // 상태별 사용자 피드백 메시지
+          switch (statusData.status) {
+            case "PREPARED":
+              updateLoadingMessage('재고 확인 중입니다...');
+              break;
+            case "DECREASE_STOCK":
+              updateLoadingMessage('재고 차감 처리 중입니다...');
+              break;
+            case "PAYMENT_PENDING":
+              updateLoadingMessage('결제 승인 처리 중입니다...');
+              break;
+          }
+
+          // 계속 폴링
         }
+        // 🎉 성공 - 폴링 중단
         else if (statusData.status === "CONFIRMED") {
-          // 결제 완료
           hideLoadingMessage();
           return {
             orderId: statusData.orderNo || orderNo,
@@ -123,16 +138,49 @@ function PaymentSuccess() {
             message: '결제가 성공적으로 완료되었습니다.'
           };
         }
-        else if (statusData.status === "PAYMENT_FAILED" ||
+        // ❌ 실패 - 폴링 중단 및 에러 처리
+        else if (statusData.status === "DECREASE_STOCK_FAIL" ||
+          statusData.status === "PAYMENT_FAILED" ||
+          statusData.status === "CANCELED" ||
           statusData.status === "FAIL" ||
-          statusData.errorMessage) {
-          // 결제 실패
+          statusData.status === "VALIDATION_FAILED" ||
+          statusData.status === "PROCESSING_FAILED" ||
+          statusData.status === "PAYMENT_PREPARE_FAIL") {
+
           hideLoadingMessage();
-          throw new Error(statusData.errorMessage || '결제 처리에 실패했습니다.');
+
+          // 상태별 구체적인 에러 메시지
+          let errorMessage;
+          switch (statusData.status) {
+            case "DECREASE_STOCK_FAIL":
+              errorMessage = "재고가 부족하여 주문을 처리할 수 없습니다.";
+              break;
+            case "PAYMENT_FAILED":
+              errorMessage = "결제 처리에 실패했습니다.";
+              break;
+            case "CANCELED":
+              errorMessage = "주문이 취소되었습니다.";
+              break;
+            case "VALIDATION_FAILED":
+              errorMessage = "상품 검증에 실패했습니다.";
+              break;
+            case "PROCESSING_FAILED":
+              errorMessage = "주문 처리 중 오류가 발생했습니다.";
+              break;
+            case "PAYMENT_PREPARE_FAIL":
+              errorMessage = "결제 준비 중 오류가 발생했습니다.";
+              break;
+            case "FAIL":
+            default:
+              errorMessage = statusData.errorMessage || "주문 처리에 실패했습니다.";
+              break;
+          }
+
+          throw new Error(errorMessage);
         }
+        // ⚠️ 예상하지 못한 상태 - 일단 계속 폴링하되 일반 메시지
         else {
-          // 기타 처리 중 상태
-          updateLoadingMessage('결제 처리 중입니다...');
+          updateLoadingMessage('주문을 처리하고 있습니다...');
         }
 
         // 1초 후 재시도
