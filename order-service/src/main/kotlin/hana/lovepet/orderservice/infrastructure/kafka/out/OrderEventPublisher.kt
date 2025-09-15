@@ -27,15 +27,15 @@ class OrderEventPublisher(
 //        kafkaTemplate.send(orderCreatedTopic, event.orderNo, json)
 //    }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun publishGetProductsInformation(event: GetProductsEvent) {
+        kafkaTemplate.send(Topics.PRODUCT_INFORMATION_REQUEST, event.orderId.toString(), om.writeValueAsString(event))
+    }
+
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun publishPaymentPrepareRequested(event: PaymentPrepareEvent) {
         kafkaTemplate.send(Topics.PAYMENT_PREPARE, event.orderId.toString(), om.writeValueAsString(event))
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    fun publishGetProductsInformation(event: GetProductsEvent) {
-        kafkaTemplate.send(Topics.PRODUCT_INFORMATION_REQUEST, event.orderId.toString(), om.writeValueAsString(event))
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

@@ -15,7 +15,7 @@ object Topics {
 
 
 
-    const val PAYMENT_CONFIRMED = "payment.confirmed" // 하는중
+    const val PAYMENT_CONFIRMED = "payment.confirmed"
     const val PAYMENT_CONFIRMED_FAIL = "payment.confirmed.fail"
 
     const val PAYMENT_CANCELED = "payment.canceled"
