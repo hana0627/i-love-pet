@@ -211,7 +211,7 @@ product.stock.rollback       # 재고 롤백 (보상 트랜잭션)
 ### 1. 정상 주문 처리
 
 ```mermaid
-sequenceDiagram
+sequenceDiagram autonumber
     participant Frontend
     participant OrderService
     participant ProductService
@@ -256,7 +256,7 @@ sequenceDiagram
 
 
     Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: SuccessUrl로 이동
+    TossPayments->>Frontend: 결제 준비 완료
 
     Note over Frontend,TossPayments: 결제 확정 흐름
 
@@ -300,12 +300,13 @@ sequenceDiagram
     Note over Frontend: 주문 완료 - 사용자에게 성공 메시지 표시
 
 ```
-
+---
 
 ### 2. 주문 실패 처리
+#### 2-1. 재고부족
 
 ```mermaid
-sequenceDiagram
+sequenceDiagram autonumber
     participant Frontend
     participant OrderService
     participant ProductService
@@ -318,7 +319,8 @@ sequenceDiagram
     Note over Frontend,TossPayments: 재고부족 실패 시나리오
 
     Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: SuccessUrl로 이동
+    TossPayments->>Frontend: 결제 준비 완료
+
 
     Frontend->>OrderService: POST /api/orders/confirm
     OrderService->>OrderService: 주문상태 변경(DECREASE_STOCK)
@@ -349,10 +351,10 @@ sequenceDiagram
     Note over Frontend: 사용자에게 "재고 부족으로 주문이 취소되었습니다" 메시지 표시
 ```
 
-
+#### 2-2. 잔액부족
 
 ```mermaid
-sequenceDiagram
+sequenceDiagram autonumber
     participant Frontend
     participant OrderService
     participant ProductService
@@ -367,7 +369,8 @@ sequenceDiagram
 
 
     Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: SuccessUrl로 이동
+    TossPayments->>Frontend: 결제 준비 완료
+
 
     Frontend ->> OrderService: POST /api/orders/confirm
     OrderService ->> OrderService: 주문상태 변경(DECREASE_STOCK)
