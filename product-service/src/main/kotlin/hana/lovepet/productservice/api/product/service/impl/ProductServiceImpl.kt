@@ -3,10 +3,8 @@ package hana.lovepet.productservice.api.product.service.impl
 import hana.lovepet.orderservice.common.exception.ApplicationException
 import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
-import hana.lovepet.productservice.api.product.controller.dto.request.ProductStockDecreaseRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
-import hana.lovepet.productservice.api.product.controller.dto.response.ProductStockDecreaseResponse
 import hana.lovepet.productservice.api.product.domain.Product
 import hana.lovepet.productservice.api.product.repository.ProductCacheRepository
 import hana.lovepet.productservice.api.product.repository.ProductRepository
@@ -18,14 +16,11 @@ import hana.lovepet.productservice.infrastructure.kafka.`in`.dto.ProductStockRol
 import hana.lovepet.productservice.infrastructure.kafka.out.ProductEventPublisher
 import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductStockDecreasedEvent
 import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductsInformationResponseEvent
-import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import java.util.*
 
 @Service
 @Transactional(readOnly = true)
@@ -99,7 +94,7 @@ class ProductServiceImpl(
             )
         }
 
-        // TODO 상품명에 "없는상품"이 있으면 예외처리
+        // TODO (임시) 상품명에 "없는상품"이 있으면 예외처리
         foundProducts.forEach { it ->
             if (it.name.contains("없는상품")) {
                 throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.id}")
@@ -120,12 +115,6 @@ class ProductServiceImpl(
 
     @Transactional
     override fun decreaseStock(orderId: Long, productStockDecreaseRequests: List<ProductStockDecreaseEvent.Product>) {
-
-//        if (processingOrders.containsKey(orderId)) {
-//            log.warn("이미 처리 중인 재고 차감 요청: orderId=$orderId")
-//            return
-//        }
-//        processingOrders[orderId] = timeProvider.now()
         if (productCacheRepository.getDecreased(orderId)) {
             log.warn("이미 처리 중인 재고 차감 요청: orderId=$orderId")
             return
@@ -142,7 +131,7 @@ class ProductServiceImpl(
         // -- 예외상황 검증 추가 - start
         products.forEach { it ->
             if (it.name.contains("재고부족")) {
-                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
+                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message+"productId: ${it.id}")
             }
         }
         // -- 예외상황 검증 추가 - end
@@ -191,65 +180,10 @@ class ProductServiceImpl(
         productRepository.saveAll(products)
     }
 
-//    override fun getProductsInformation(ids: List<Long>): List<ProductInformationResponse> {
-//        val entities: List<Product> = productRepository.findAllById(ids)
-//        val foundIds = entities.map { it.id }.toSet()
-//        val missing = ids.filterNot { it in foundIds }
-//        if (missing.isNotEmpty()) {
-//            throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $missing")
-//            throw EntityNotFoundException("다음 상품을 찾을 수 없습니다: $missing")
-//        }
-//
-//        val temp = entities.map {
-//            ProductInformationResponse(
-//                productId = it.id!!,
-//                productName = it.name,
-//                price = it.price,
-//                stock = it.stock,
-//            )
-//        }
-//        return temp
-//    }
-
-
-
-//    override fun getStock(productId: Long): Int {
-//        return getProductOrException(productId).stock
-//    }
-
     private fun getProductOrException(productId: Long): Product {
         return productRepository.findById(productId)
             .orElseThrow { ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: $productId") }
     }
 
-    // 기존코드 남김
-//    @Transactional
-//    override fun decreaseStock(productStockDecreaseRequests: List<ProductStockDecreaseRequest>): ProductStockDecreaseResponse {
-//        val ids = productStockDecreaseRequests.map { it.productId }
-//
-//        val products = productRepository.findAllByIdWithLock(ids)
-//
-//
-//        // TODO 삭제
-//        // -- 예외상황 검증 추가 - start
-//        products.forEach { it ->
-//            if (it.name.contains("재고부족")) {
-//                throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
-//            }
-//        }
-//
-//        // -- 예외상황 검증 추가 - end
-//
-//        val productMap = products.associateBy { it.id }
-//
-//        productStockDecreaseRequests.forEach {
-//            val product = productMap[it.productId]
-//                ?: throw ApplicationException(ErrorCode.PRODUCT_NOT_FOUND, "다음 상품을 찾을 수 없습니다: ${it.productId}")
-//            product.decreaseStock(it.quantity, timeProvider)
-//        }
-//
-//        productRepository.saveAll(products)
-//
-//        return ProductStockDecreaseResponse(true)
-//    }
+
 }

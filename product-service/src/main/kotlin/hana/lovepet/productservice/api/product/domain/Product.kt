@@ -50,7 +50,7 @@ class Product (
 
     fun decreaseStock(quantity: Int, timeProvider: TimeProvider) {
         if(stock < quantity) {
-            throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message)
+            throw ApplicationException(ErrorCode.NOT_ENOUGH_STOCK, ErrorCode.NOT_ENOUGH_STOCK.message+"productId: $id")
         }
         stock -= quantity
         updatedAt = timeProvider.now()
