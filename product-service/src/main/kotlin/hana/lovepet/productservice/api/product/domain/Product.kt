@@ -1,7 +1,7 @@
 package hana.lovepet.productservice.api.product.domain
 
-import hana.lovepet.orderservice.common.exception.ApplicationException
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+import hana.lovepet.productservice.common.exception.ApplicationException
+import hana.lovepet.productservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.common.clock.TimeProvider
 import jakarta.persistence.*
 import java.time.LocalDateTime

@@ -1,6 +1,6 @@
-package hana.lovepet.orderservice.common.exception
+package hana.lovepet.productservice.common.exception
 
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+import hana.lovepet.productservice.common.exception.constant.ErrorCode
 
 data class ApplicationException(
     val errorCode: ErrorCode,

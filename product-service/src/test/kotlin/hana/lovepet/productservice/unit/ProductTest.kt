@@ -1,7 +1,7 @@
 package hana.lovepet.productservice.unit
 
-import hana.lovepet.orderservice.common.exception.ApplicationException
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+import hana.lovepet.productservice.common.exception.ApplicationException
+import hana.lovepet.productservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.api.product.domain.Product
 import hana.lovepet.productservice.common.clock.TimeProvider
 import org.assertj.core.api.Assertions

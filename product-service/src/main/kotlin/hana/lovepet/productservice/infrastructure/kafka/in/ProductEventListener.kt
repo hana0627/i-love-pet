@@ -1,7 +1,7 @@
 package hana.lovepet.productservice.infrastructure.kafka.`in`
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import hana.lovepet.orderservice.common.exception.ApplicationException
+import hana.lovepet.productservice.common.exception.ApplicationException
 import hana.lovepet.productservice.api.product.service.ProductService
 import hana.lovepet.productservice.infrastructure.kafka.Groups
 import hana.lovepet.productservice.infrastructure.kafka.Topics
@@ -45,12 +45,15 @@ class ProductEventListener(
         ack: Acknowledgment
     ) {
         val message = record.value()
+
         try {
             val readValue = om.readValue(message, GetProductsEvent::class.java)
+            log.info("=== 메시지 파싱 성공: orderId=${readValue.orderId}, items=${readValue.items} ===")
             productService.getProductsInformation(readValue.orderId, readValue.items)
+            log.info("=== productService.getProductsInformation 호출 완료 ===")
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("getProductsInformation 처리 실패. payload={}, err{}", message, e.message)
+            log.error("getProductsInformation 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
 //            ack.acknowledge()
         }

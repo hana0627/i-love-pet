@@ -1,7 +1,7 @@
 package hana.lovepet.productservice.api.product.service.impl
 
-import hana.lovepet.orderservice.common.exception.ApplicationException
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+import hana.lovepet.productservice.common.exception.ApplicationException
+import hana.lovepet.productservice.common.exception.constant.ErrorCode
 import hana.lovepet.productservice.api.product.controller.dto.request.ProductRegisterRequest
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductInformationResponse
 import hana.lovepet.productservice.api.product.controller.dto.response.ProductRegisterResponse
