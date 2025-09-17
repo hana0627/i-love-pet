@@ -1,5 +1,12 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
   kafka:
+    listener:
+      ack-mode: manual
     consumer:
       bootstrap-servers: ${spring.embedded.kafka.brokers}
       group-id: test-group
