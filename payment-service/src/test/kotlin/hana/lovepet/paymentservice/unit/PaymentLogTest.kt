@@ -1,5 +1,7 @@
-package hana.lovepet.paymentservice.api.payment.domain
+package hana.lovepet.paymentservice.unit
 
+import hana.lovepet.paymentservice.api.payment.domain.Payment
+import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
 import hana.lovepet.paymentservice.api.payment.domain.constant.LogType
 import hana.lovepet.paymentservice.common.clock.TimeProvider
 import org.assertj.core.api.Assertions.assertThat
@@ -23,7 +25,7 @@ class PaymentLogTest {
     }
     @Test
     fun `PaymentLog 엔티티 생성 테스트`() {
-        val payment = Payment.fixture(timeProvider = timeProvider).apply { id = 1L }
+        val payment = Payment.Companion.fixture(timeProvider = timeProvider).apply { id = 1L }
         val log = PaymentLog(
             paymentId = payment.id!!,
             logType = LogType.RESPONSE,
