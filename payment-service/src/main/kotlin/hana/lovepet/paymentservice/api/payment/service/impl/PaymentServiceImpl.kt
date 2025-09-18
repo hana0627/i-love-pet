@@ -1,14 +1,10 @@
 package hana.lovepet.paymentservice.api.payment.service.impl
 
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
+//import hana.lovepet.paymentservice.common.exception.PgCommunicationException
+//import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.ConfirmPaymentResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
+import hana.lovepet.paymentservice.api.payment.controller.dto.response.*
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
 import hana.lovepet.paymentservice.api.payment.domain.Payment
 import hana.lovepet.paymentservice.api.payment.domain.PaymentLog
 import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
@@ -18,7 +14,7 @@ import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.ApplicationException
-//import hana.lovepet.paymentservice.common.exception.PgCommunicationException
+import hana.lovepet.paymentservice.common.exception.constant.ErrorCode
 import hana.lovepet.paymentservice.common.uuid.UUIDGenerator
 import hana.lovepet.paymentservice.infrastructure.kafka.`in`.dto.PaymentCancelEvent
 import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentCanceledEvent
@@ -26,7 +22,6 @@ import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentConfirmed
 import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentPreparedEvent
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentConfirmRequest
-//import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -276,6 +271,7 @@ class PaymentServiceImpl(
                     message = "결제 취소 완료: reason='${paymentCancelEvent.refundReason}', transactionKey=${latestCancel.transactionKey}, cancelAmount=${latestCancel.cancelAmount}"
                 )
             )
+            paymentRepository.save(payment)
 
             applicationEventPublisher.publishEvent(
                 PaymentCanceledEvent(
@@ -422,85 +418,4 @@ class PaymentServiceImpl(
         TODO("Not yet implemented")
     }
 
-//    @Transactional(noRollbackFor = [ApplicationException::class])
-//    override fun confirmPayment(paymentId: Long, confirmPaymentRequest: ConfirmPaymentRequest): ConfirmPaymentResponse {
-//        val payment = paymentRepository.findById(paymentId)
-//            .orElseThrow { ApplicationException(ErrorCode.PAYMENT_NOT_FOUND, "Payments not found [id = $paymentId]") }
-//
-//        // 결제확정 API 호출
-//        val tossResponse = try {
-//            tossClient.confirm(
-//                TossPaymentConfirmRequest(
-//                    orderId = confirmPaymentRequest.orderNo,
-//                    amount = confirmPaymentRequest.amount,
-//                    paymentKey = confirmPaymentRequest.paymentKey
-//                )
-//            )
-//        } catch (e: ApplicationException) {
-//            // 결제 승인 실패 로그 저장
-//            val paymentLog = PaymentLog.response(
-//                paymentId = paymentId,
-//                message = "결제 승인 실패: ${e.message}"
-//            )
-//            payment.fail(
-//                timeProvider = timeProvider,
-//                paymentKey = confirmPaymentRequest.paymentKey,
-//                failReason = e.message
-//            )
-//            paymentRepository.save(payment)
-//            paymentLogRepository.save(paymentLog)
-//            throw e
-//        }
-//
-//        if (tossResponse.status != "DONE") {
-//            val errorMessage = "결제 승인 상태 오류: ${tossResponse.status}"
-//            val paymentLog = PaymentLog.response(
-//                paymentId = paymentId,
-//                message = errorMessage
-//            )
-//            payment.fail(
-//                timeProvider = timeProvider,
-//                paymentKey = confirmPaymentRequest.paymentKey,
-//                failReason = errorMessage
-//            )
-//            paymentRepository.save(payment)
-//            paymentLogRepository.save(paymentLog)
-//            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
-//        }
-//
-//        // 금액 검증
-//        if (tossResponse.totalAmount != confirmPaymentRequest.amount) {
-//            val errorMessage = "결제 금액 불일치: expected=${confirmPaymentRequest.amount}, actual=${tossResponse.totalAmount}"
-//            val paymentLog = PaymentLog.response(
-//                paymentId = paymentId,
-//                message = errorMessage
-//            )
-//            payment.fail(
-//                timeProvider = timeProvider,
-//                paymentKey = confirmPaymentRequest.paymentKey,
-//                failReason = errorMessage
-//            )
-//            paymentRepository.save(payment)
-//            paymentLogRepository.save(paymentLog)
-//            throw ApplicationException(ErrorCode.UNHEALTHY_PG_COMMUNICATION, errorMessage)
-//        }
-//
-//
-//        payment.approve(
-//            timeProvider = timeProvider,
-//            paymentKey = confirmPaymentRequest.paymentKey
-//        )
-//
-//        val paymentLog = PaymentLog.response(
-//            paymentId = paymentId,
-//            message = "결제 승인 완료: orderId = ${payment.orderId}, tossPaymentKey = ${tossResponse.paymentKey}"
-//        )
-//
-//        paymentRepository.save(payment)
-//        paymentLogRepository.save(paymentLog)
-//
-//        return ConfirmPaymentResponse(
-//            paymentId = paymentId,
-//        )
-//    }
 }

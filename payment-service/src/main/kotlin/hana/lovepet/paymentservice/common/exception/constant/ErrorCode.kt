@@ -1,4 +1,4 @@
-package hana.lovepet.orderservice.common.exception.constant
+package hana.lovepet.paymentservice.common.exception.constant
 
 import org.springframework.http.HttpStatus
 

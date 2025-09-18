@@ -1,9 +1,6 @@
 package hana.lovepet.paymentservice.infrastructure.kafka.`in`
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
-import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
-import hana.lovepet.paymentservice.api.payment.repository.PaymentRepository
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
 import hana.lovepet.paymentservice.common.exception.ApplicationException
 import hana.lovepet.paymentservice.infrastructure.kafka.Groups
@@ -24,7 +21,7 @@ import org.springframework.kafka.retrytopic.DltStrategy
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.retry.annotation.Backoff
 import org.springframework.stereotype.Service
-import java.util.UUID
+import java.util.*
 
 @Service
 class PaymentEventListener(

@@ -1,7 +1,5 @@
 package hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response
 
-import java.time.LocalDateTime
-
 data class TossPaymentCancelResponse(
     val paymentKey: String,
     val orderId: String,

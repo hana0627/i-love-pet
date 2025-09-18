@@ -1,9 +1,9 @@
 package hana.lovepet.paymentservice.api.payment.domain
 
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
 import hana.lovepet.paymentservice.api.payment.domain.constant.PaymentStatus
 import hana.lovepet.paymentservice.common.clock.TimeProvider
 import hana.lovepet.paymentservice.common.exception.ApplicationException
+import hana.lovepet.paymentservice.common.exception.constant.ErrorCode
 import jakarta.persistence.*
 import java.time.LocalDateTime
 

@@ -1,26 +1,12 @@
 package hana.lovepet.paymentservice.api.payment.controller
 
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.ConfirmPaymentRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.FailPaymentRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentCancelRequest
 import hana.lovepet.paymentservice.api.payment.controller.dto.request.PaymentRefundRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.request.PreparePaymentRequest
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.ConfirmPaymentResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentLogResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.GetPaymentResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentCancelResponse
 import hana.lovepet.paymentservice.api.payment.controller.dto.response.PaymentRefundResponse
-import hana.lovepet.paymentservice.api.payment.controller.dto.response.PreparePaymentResponse
 import hana.lovepet.paymentservice.api.payment.service.PaymentService
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PatchMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/payments")

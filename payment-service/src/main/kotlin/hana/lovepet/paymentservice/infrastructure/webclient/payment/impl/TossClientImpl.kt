@@ -1,12 +1,12 @@
 package hana.lovepet.paymentservice.infrastructure.webclient.payment.impl
 
-import hana.lovepet.orderservice.common.exception.constant.ErrorCode
+//import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import hana.lovepet.paymentservice.common.exception.ApplicationException
+import hana.lovepet.paymentservice.common.exception.constant.ErrorCode
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.TossClient
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentCancelRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.request.TossPaymentConfirmRequest
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.TossPaymentCancelResponse
-//import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.PgCancelResponse
 import hana.lovepet.paymentservice.infrastructure.webclient.payment.dto.response.TossPaymentConfirmResponse
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
