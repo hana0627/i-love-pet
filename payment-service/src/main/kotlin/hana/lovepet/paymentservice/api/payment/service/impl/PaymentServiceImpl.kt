@@ -51,6 +51,12 @@ class PaymentServiceImpl(
         amount: Long,
         method: String,
     ): PreparePaymentResponse {
+        // 발생할 가능성은 없지만 테스트용 예외
+        if(userId < 0) {
+            throw ApplicationException(ErrorCode.ILLEGALSTATE, ErrorCode.ILLEGALSTATE.message)
+        }
+
+
         // 0. 멱등처리
         val foundPayment = paymentRepository.findByOrderId(orderId)
         if (foundPayment != null) {
