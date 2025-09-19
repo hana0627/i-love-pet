@@ -59,9 +59,6 @@ import java.util.concurrent.TimeUnit
 class KafkaEventTest {
 
     @Autowired
-    private lateinit var productService: ProductService
-
-    @Autowired
     lateinit var kafkaTemplate: KafkaTemplate<String, String>
     @Autowired
     lateinit var om: ObjectMapper
@@ -77,7 +74,6 @@ class KafkaEventTest {
     @MockitoBean
     lateinit var rollbackStockRedisTemplate: RedisTemplate<String, Boolean>
 
-    // 임베디드 카프카가 노출하는 브로커 주소 (가장 안전한 방식)
     @Value("\${spring.embedded.kafka.brokers}")
     lateinit var brokers: String
 
