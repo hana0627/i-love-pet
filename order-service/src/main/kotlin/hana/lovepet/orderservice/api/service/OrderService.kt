@@ -23,7 +23,7 @@ interface OrderService {
     fun paymentPrepareFail(orderId: Long)
     fun mappedPaymentId(orderId: Long, paymentId: Long)
     fun getStatus(orderNo: String): OrderStatusResponse
-    fun confirmOrder(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse
+    fun OrderItemDecreaseRequest(confirmOrderResponse: ConfirmOrderRequest): ConfirmOrderResponse
     fun processOrder(orderId: Long)
     fun decreaseStockFail(orderId: Long)
     fun rollbackStockAndCancel(orderId: Long)

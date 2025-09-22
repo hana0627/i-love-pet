@@ -13,7 +13,6 @@ import java.time.LocalDateTime
     name = "orders",
     indexes = [Index(name = "idx_order_no", columnList = "order_no", unique = true)]
 )
-//TODO ERD update
 class Order (
     @Column(nullable = false, name = "user_id")
     val userId: Long,
@@ -97,9 +96,6 @@ class Order (
     }
 
     fun fail(timeProvider: TimeProvider) {
-        if(this.status != CREATED){
-            throw ApplicationException(ErrorCode.ILLEGALSTATE, "CREATED인 상품만 FAIL이 가능합니다.")
-        }
         this.status = PAYMENT_FAILED
         this.updatedAt = timeProvider.now()
     }
