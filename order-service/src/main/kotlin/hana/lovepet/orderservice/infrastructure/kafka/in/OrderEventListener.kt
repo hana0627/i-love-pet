@@ -89,6 +89,14 @@ class OrderEventListener(
         }
     }
 
+    @RetryableTopic(
+        attempts = "3", // 최대 3회 실행
+        backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
+//        include = [Exception::class],
+        exclude = [ApplicationException::class],
+        dltStrategy = DltStrategy.FAIL_ON_ERROR, // 모든 재시도 실패시 DLT로 전송
+        dltTopicSuffix = "-dlt",
+    )
     @KafkaListener(topics = [Topics.PAYMENT_PREPARED], groupId = Groups.ORDER)
     fun onPreparedRequest(
         record: ConsumerRecord<String, String>,
@@ -103,9 +111,7 @@ class OrderEventListener(
             ack.acknowledge()
         } catch (e: Exception) {
             log.error("결제 서비스 처리 실패. payload={}, err={}", messages, e.message, e)
-            // 재시도/ DLQ는 Step4~5에서 설정 (ErrorHandler or Dead Letter Topic)
-            // 일단 nack을 안 하고 운영 단순화를 위해 ack (학습 환경)
-            ack.acknowledge()
+            throw e
         }
     }
 
