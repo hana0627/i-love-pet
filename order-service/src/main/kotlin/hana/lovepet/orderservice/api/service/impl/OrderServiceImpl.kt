@@ -311,16 +311,16 @@ class OrderServiceImpl(
         order.updateStatus(OrderStatus.DECREASE_STOCK_FAIL, timeProvider)
 
         orderRepository.save(order)
-        applicationEventPublisher.publishEvent(
-            PaymentCancelEvent(
-                eventId = UUID.randomUUID().toString(),
-                orderId = order.id!!,
-                orderNo = order.orderNo,
-                paymentId = order.paymentId!!,
-                refundReason = "재고차감실패: orderId: $orderId",
-                idempotencyKey = order.orderNo,
-            )
-        )
+//        applicationEventPublisher.publishEvent(
+//            PaymentCancelEvent(
+//                eventId = UUID.randomUUID().toString(),
+//                orderId = order.id!!,
+//                orderNo = order.orderNo,
+//                paymentId = order.paymentId!!,
+//                refundReason = "재고차감실패: orderId: $orderId",
+//                idempotencyKey = order.orderNo,
+//            )
+//        )
     }
 
     @Transactional
