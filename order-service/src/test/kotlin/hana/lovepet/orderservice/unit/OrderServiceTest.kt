@@ -127,7 +127,8 @@ class OrderServiceTest {
             )
         )
         given(timeProvider.todayString()).willReturn(todayString)
-        given(orderRepository.findMaxOrderNoByToday("$todayString%")).willReturn(null)
+//        given(orderRepository.findMaxOrderNoByToday("$todayString%")).willReturn(null)
+        given(orderCacheRepository.getNextOrderNumber(todayString)).willReturn("${todayString}00000001")
         given(orderRepository.save(any<Order>())).willReturn(savedOrder)
 
         //when
@@ -181,7 +182,8 @@ class OrderServiceTest {
         )
 
         given(timeProvider.todayString()).willReturn(todayString)
-        given(orderRepository.findMaxOrderNoByToday("$todayString%")).willReturn(existingOrderNo)
+        given(orderCacheRepository.getNextOrderNumber(todayString)).willReturn(existingOrderNo)
+
         given(orderRepository.save(any<Order>())).willReturn(savedOrder)
 
         //when
@@ -226,7 +228,7 @@ class OrderServiceTest {
             )
         )
         given(timeProvider.todayString()).willReturn(todayString)
-        given(orderRepository.findMaxOrderNoByToday("$todayString%")).willReturn(null)
+        given(orderCacheRepository.getNextOrderNumber(todayString)).willReturn("${todayString}00000001")
         given(orderRepository.save(any<Order>())).willReturn(savedOrder)
 
         //when

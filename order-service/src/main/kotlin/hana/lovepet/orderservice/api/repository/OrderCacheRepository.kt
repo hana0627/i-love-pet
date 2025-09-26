@@ -25,4 +25,18 @@ class OrderCacheRepository(
         log.info("findPaymentKeyByOrderId: {}", key)
         return redisTemplate.opsForValue().get(key)
     }
+
+    fun getNextOrderNumber(dateString: String): String {
+        val key = "orderNo_$dateString"
+        val nextSeq = redisTemplate.opsForValue().increment(key) ?: 1L
+
+        // TTL 36시간 설정
+        redisTemplate.expire(key, Duration.ofHours(36))
+
+        // yyyyMMdd + 8자리 시퀀스 번호 (00000001 ~ 99999999)
+        val orderNo = "$dateString%08d".format(nextSeq)
+
+        log.info("Generated orderNo: {} for date: {}, sequence: {}", orderNo, dateString, nextSeq)
+        return orderNo
+    }
 }

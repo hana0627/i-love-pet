@@ -453,14 +453,9 @@ class OrderServiceImpl(
     }
 
     private fun createAndSaveOrder(createOrderRequest: CreateOrderRequest, userName: String): Order {
-        // 주문번호 생성
+        // Redis를 이용한 주문번호 생성
         val todayString = timeProvider.todayString()
-        // TODO Redis 사용
-        val maxOrderNo = orderRepository.findMaxOrderNoByToday("$todayString%")
-        val nextSeq = if (maxOrderNo == null) 1 else maxOrderNo.substring(8).toInt() + 1
-        val orderNo = todayString + "%07d".format(nextSeq)
-//        val orderNo = UUID.randomUUID().toString().substring(10)
-//        println("orderNo = ${orderNo}")
+        val orderNo = orderCacheRepository.getNextOrderNumber(todayString)
 
         val order = Order.create(createOrderRequest.userId, userName, orderNo, createOrderRequest.method, timeProvider)
         val savedOrder = orderRepository.save(order)

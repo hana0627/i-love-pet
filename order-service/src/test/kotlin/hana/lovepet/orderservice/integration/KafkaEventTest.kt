@@ -434,7 +434,7 @@ class KafkaEventTest {
     @Test
     @Timeout(10, unit = TimeUnit.SECONDS)
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
-    fun `재고 차감 실패 이벤트 처리 후 결제 취소 토픽 발행`() {
+    fun `재고 차감 실패 이벤트 처리`() {
         // given
         val savedOrder = createTestOrder(2222L)
         savedOrder.paymentId = 123L
@@ -459,13 +459,13 @@ class KafkaEventTest {
         // then
         Thread.sleep(3000) // 처리 시간 대기
 
-        // 결제 취소 이벤트 발행 확인
-        val cancelRecord: ConsumerRecord<String, String> =
-            KafkaTestUtils.getSingleRecord(consumer, Topics.PAYMENT_CANCEL, Duration.ofSeconds(5))
+        // 결제 취소 이벤트 발행 확인 -- 불필요한 기능으로 프러덕션코드에서 주석처리 하였음
+//        val cancelRecord: ConsumerRecord<String, String> =
+//            KafkaTestUtils.getSingleRecord(consumer, Topics.PAYMENT_CANCEL, Duration.ofSeconds(5))
 
-        val cancelEvent = om.readValue(cancelRecord.value(), PaymentCancelEvent::class.java)
-        assertThat(cancelEvent.orderId).isEqualTo(savedOrder.id!!)
-        assertThat(cancelEvent.paymentId).isEqualTo(123L)
+//        val cancelEvent = om.readValue(cancelRecord.value(), PaymentCancelEvent::class.java)
+//        assertThat(cancelEvent.orderId).isEqualTo(savedOrder.id!!)
+//        assertThat(cancelEvent.paymentId).isEqualTo(123L)
 
         val updatedOrder = orderRepository.findById(savedOrder.id!!).orElseThrow()
         assertThat(updatedOrder.status).isEqualTo(OrderStatus.DECREASE_STOCK_FAIL)
