@@ -260,8 +260,8 @@ function OrderCreate() {
         const statusData = await statusRes.json();
         console.log(`폴링 ${attempts + 1}회차:`, statusData);
 
-        if(statusData.status =="CREATED" || statusData.status =="VALIDATING" || statusData.status =="VALIDATION_SUCCESS") {
-          // 계속 대기
+        if(statusData.status =="CREATED" || statusData.status =="VALIDATING") {
+
         }
         else if(statusData.status =="PREPARED") {
           hideLoadingMessage();
@@ -272,19 +272,7 @@ function OrderCreate() {
         }
         else {
           hideLoadingMessage();
-          // 상태별 상세 에러 메시지
-          const errorMessages = {
-            'VALIDATION_FAILED': '상품 정보가 올바르지 않거나 재고가 부족합니다. 장바구니를 다시 확인해주세요.',
-            'PROCESSING_FAILED': '주문 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
-            'PAYMENT_PREPARE_FAIL': '결제 준비 중 오류가 발생했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.',
-            'DECREASE_STOCK_FAIL': '재고 차감 중 오류가 발생했습니다. 상품 재고를 다시 확인해주세요.',
-            'PAYMENT_FAILED': '결제가 실패했습니다. 결제 정보를 확인하고 다시 시도해주세요.',
-            'CANCELED': '주문이 취소되었습니다.',
-            'FAIL': '주문 처리가 실패했습니다. 고객센터로 문의해주세요.'
-          };
-
-          const errorMessage = errorMessages[statusData.status] || '알 수 없는 오류가 발생했습니다. 고객센터로 문의해주세요.';
-          throw new Error(errorMessage);
+          throw new Error("결제 준비에 실패했습니다.")
         }
 
         // 성공: 금액이 계산됨

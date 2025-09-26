@@ -160,26 +160,16 @@ function OrderList() {
   }
 
 
-  const statuses = ["ALL", "CREATED", "VALIDATING", "VALIDATION_SUCCESS", "VALIDATION_FAILED", "PROCESSING_FAILED", "PREPARED", "PAYMENT_PREPARE_FAIL", "DECREASE_STOCK", "DECREASE_STOCK_FAIL", "PAYMENT_PENDING", "PAYMENT_FAILED", "CANCELED", "CONFIRMED", "FAIL"];
+  const statuses = ["ALL", "CREATED", "CONFIRMED", "FAIL", "CANCELED"];
 
   function statusPill(s) {
     const colors = {
       CREATED: "#64748b", // slate
-      VALIDATING: "#f59e0b", // amber - 검증 중
-      VALIDATION_SUCCESS: "#10b981", // emerald - 검증 성공
-      VALIDATION_FAILED: "#ef4444", // red - 검증 실패
-      PROCESSING_FAILED: "#dc2626", // red-600 - 처리 실패
-      PREPARED: "#06b6d4", // cyan - 준비 완료
-      PAYMENT_PREPARE_FAIL: "#ef4444", // red - 결제 준비 실패
-      DECREASE_STOCK: "#3b82f6", // blue - 재고 감소 중
-      DECREASE_STOCK_FAIL: "#dc2626", // red-600 - 재고 감소 실패
-      PAYMENT_PENDING: "#f59e0b", // amber - 결제 대기
-      PAYMENT_FAILED: "#ef4444", // red - 결제 실패
-      CONFIRMED: "#16a34a", // green - 확정
-      FAIL: "#ef4444", // red - 실패
-      CANCELED: "#a855f7", // violet - 취소
+      CONFIRMED: "#16a34a", // green
+      FAIL: "#ef4444", // red
+      CANCELED: "#a855f7", // violet
     };
-    const bg = colors[s] || "#6b7280";
+    const bg = colors[s] || "#475569";
     return <span
       style={{padding: "2px 8px", borderRadius: 999, background: bg, color: "#fff", fontSize: 12}}>{s}</span>;
   }
