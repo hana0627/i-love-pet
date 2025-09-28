@@ -15,6 +15,7 @@ import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductStockDecre
 import hana.lovepet.orderservice.infrastructure.kafka.`in`.dto.ProductsInformationResponseEvent
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.kafka.annotation.DltHandler
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.annotation.RetryableTopic
@@ -22,6 +23,7 @@ import org.springframework.kafka.retrytopic.DltStrategy
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.retry.annotation.Backoff
 import org.springframework.stereotype.Service
+import java.util.*
 
 @Service
 class OrderEventListener(
@@ -30,6 +32,12 @@ class OrderEventListener(
 ) {
 
     private val log = LoggerFactory.getLogger(OrderEventListener::class.java)
+
+    private fun setupTraceId(record: ConsumerRecord<String, String>) {
+        val traceHeader = record.headers().lastHeader("traceId")?.value()?.toString(Charsets.UTF_8)
+        val traceId = traceHeader ?: UUID.randomUUID().toString()
+        MDC.put("traceId", traceId)
+    }
 
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
@@ -44,9 +52,10 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, ProductsInformationResponseEvent::class.java)
+            val readValue = om.readValue(message, ProductsInformationResponseEvent::class.java)
             if (readValue.success) {
                 orderService.mappedTotalAmount(readValue.orderId, readValue.products)
                 log.info("상품 정보 처리 완료. orderId={}, products={}", readValue.orderId, readValue.products)
@@ -57,8 +66,10 @@ class OrderEventListener(
             log.info("Payment prepared. orderId={}, products={}", readValue.orderId, readValue.products)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("prepared 처리 실패. payload={}, err={}", messages, e.message)
+            log.error("prepared 처리 실패. payload={}, err={}", message, e.message)
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -75,17 +86,20 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentPrepareFailEvent::class.java)
+            val readValue = om.readValue(message, PaymentPrepareFailEvent::class.java)
 
             val result = orderService.paymentPrepareFail(readValue.orderId)
             log.info("Payment prepared. orderId={}, paymentId={}", readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -102,16 +116,19 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentPreparedEvent::class.java)
+            val readValue = om.readValue(message, PaymentPreparedEvent::class.java)
 
             val result = orderService.mappedPaymentId(readValue.orderId, readValue.paymentId)
             log.info("Payment prepared. orderId={}, paymentId={}", readValue.orderId, readValue.paymentId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("결제 서비스 처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("결제 서비스 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -129,9 +146,10 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, ProductStockDecreasedEvent::class.java)
+            val readValue = om.readValue(message, ProductStockDecreasedEvent::class.java)
             if(readValue.success) {
                 val result = orderService.processOrder(readValue.orderId)
             }else {
@@ -140,9 +158,11 @@ class OrderEventListener(
             log.info("stock decreased. orderId={}, paymentId={}", readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -160,16 +180,19 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentConfirmedEvent::class.java)
+            val readValue = om.readValue(message, PaymentConfirmedEvent::class.java)
             val result = orderService.confirmedOrder(readValue.orderId)
             log.info("payment confirmed. orderId={}, paymentId={}", readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -187,15 +210,18 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentConfirmedFailEvent::class.java)
+            val readValue = om.readValue(message, PaymentConfirmedFailEvent::class.java)
             val result = orderService.failOrder(readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -212,15 +238,18 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentCanceledEvent::class.java)
+            val readValue = om.readValue(message, PaymentCanceledEvent::class.java)
             val result = orderService.canceledOrder(readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -237,15 +266,18 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentCanceledFailEvent::class.java)
+            val readValue = om.readValue(message, PaymentCanceledFailEvent::class.java)
             val result = orderService.canceledFailOrder(readValue.orderId)
             ack.acknowledge()
         } catch (e: Exception) {
-            log.error("처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("처리 실패. payload={}, err={}", message, e.message, e)
 //            ack.acknowledge()
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -258,6 +290,7 @@ class OrderEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
+        setupTraceId(record)
         log.error("DLT로 전송된 상품 정보 요청 처리: {}", record.value())
 
         try {
@@ -318,6 +351,7 @@ class OrderEventListener(
             log.error("DLT 처리 중 오류 발생: {}", record.value(), e)
         } finally {
             ack.acknowledge()
+            MDC.remove("traceId")
         }
     }
 

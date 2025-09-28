@@ -11,17 +11,17 @@ import org.springframework.transaction.event.TransactionalEventListener
 
 @Service
 class ProductEventPublisher (
-    private val kafkaTemplate: KafkaTemplate<String, String>,
+    private val tracingKafkaPublisher: TracingKafkaPublisher,
     private val om: ObjectMapper,
 ){
 
 //    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun publishProductsInformation(event: ProductsInformationResponseEvent) {
-        kafkaTemplate.send(Topics.PRODUCT_INFORMATION_RESPONSE, event.orderId.toString(), om.writeValueAsString(event))
+        tracingKafkaPublisher.send(Topics.PRODUCT_INFORMATION_RESPONSE, event.orderId.toString(), om.writeValueAsString(event))
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun publishProductStockDecreased(event: ProductStockDecreasedEvent) {
-        kafkaTemplate.send(Topics.PRODUCT_STOCK_DECREASED, event.orderId.toString(), om.writeValueAsString(event))
+        tracingKafkaPublisher.send(Topics.PRODUCT_STOCK_DECREASED, event.orderId.toString(), om.writeValueAsString(event))
     }
 }

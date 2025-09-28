@@ -13,6 +13,7 @@ import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductStockDecr
 import hana.lovepet.productservice.infrastructure.kafka.out.dto.ProductsInformationResponseEvent
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.kafka.annotation.DltHandler
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.annotation.RetryableTopic
@@ -31,6 +32,14 @@ class ProductEventListener(
 ) {
 
     private val log = LoggerFactory.getLogger(ProductEventListener::class.java)
+
+    private fun setupTraceId(record: ConsumerRecord<String, String>) {
+        val traceHeader = record.headers().lastHeader("traceId")?.value()?.toString(Charsets.UTF_8)
+        val traceId = traceHeader ?: UUID.randomUUID().toString()
+        MDC.put("traceId", traceId)
+    }
+
+
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
@@ -44,6 +53,7 @@ class ProductEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment
     ) {
+        setupTraceId(record)
         val message = record.value()
 
         try {
@@ -56,6 +66,8 @@ class ProductEventListener(
             log.error("getProductsInformation 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
 //            ack.acknowledge()
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -73,6 +85,7 @@ class ProductEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment
     ) {
+        setupTraceId(record)
         val message = record.value()
         try {
             val readValue = om.readValue(message, ProductStockDecreaseEvent::class.java)
@@ -82,6 +95,8 @@ class ProductEventListener(
             log.error("getProductsInformation 처리 실패. payload={}, err{}", message, e.message)
             throw e
 //            ack.acknowledge()
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -99,6 +114,7 @@ class ProductEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment
     ) {
+        setupTraceId(record)
         val message = record.value()
         try {
             val readValue = om.readValue(message, ProductStockRollbackEvent::class.java)
@@ -108,6 +124,8 @@ class ProductEventListener(
             log.error("getProductsInformation 처리 실패. payload={}, err{}", message, e.message)
             throw e
 //            ack.acknowledge()
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -119,6 +137,7 @@ class ProductEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment
     ) {
+        setupTraceId(record)
         log.error("DLT로 전송된 상품 정보 요청 처리: {}", record.value())
         try {
             when (record.topic()) {
@@ -156,6 +175,7 @@ class ProductEventListener(
         } catch (e: Exception) {
             log.error("DLT 처리 중 오류 발생: {}", record.value(), e)
         } finally {
+            MDC.remove("traceId")
             ack.acknowledge()
         }
     }

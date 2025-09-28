@@ -14,6 +14,7 @@ import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentConfirmed
 import hana.lovepet.paymentservice.infrastructure.kafka.out.dto.PaymentPrepareFailEvent
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.kafka.annotation.DltHandler
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.annotation.RetryableTopic
@@ -32,6 +33,14 @@ class PaymentEventListener(
 
     private val log = LoggerFactory.getLogger(PaymentEventListener::class.java)
 
+
+    private fun setupTraceId(record: ConsumerRecord<String, String>) {
+        val traceHeader = record.headers().lastHeader("traceId")?.value()?.toString(Charsets.UTF_8)
+        val traceId = traceHeader ?: UUID.randomUUID().toString()
+        MDC.put("traceId", traceId)
+    }
+    
+
     @RetryableTopic(
         attempts = "3", // 최대 3회 실행
         backoff = Backoff(delay = 1000), //1 초 간격으로 재시도
@@ -45,9 +54,10 @@ class PaymentEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentPrepareEvent::class.java)
+            val readValue = om.readValue(message, PaymentPrepareEvent::class.java)
             val result = paymentService.preparePayment(
                 userId = readValue.userId,
                 orderId = readValue.orderId,
@@ -58,8 +68,10 @@ class PaymentEventListener(
             ack.acknowledge()
 
         } catch (e: Exception) {
-            log.error("prepare.requested 처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("prepare.requested 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -76,9 +88,10 @@ class PaymentEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentPendingEvent::class.java)
+            val readValue = om.readValue(message, PaymentPendingEvent::class.java)
             val result = paymentService.confirmPayment(
                 orderId = readValue.orderId,
                 paymentId = readValue.paymentId,
@@ -90,8 +103,10 @@ class PaymentEventListener(
             ack.acknowledge()
 
         } catch (e: Exception) {
-            log.error("pending.requested 처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("pending.requested 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -108,17 +123,20 @@ class PaymentEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
-        val messages = record.value()
+        setupTraceId(record)
+        val message = record.value()
         try {
-            val readValue = om.readValue(messages, PaymentCancelEvent::class.java)
+            val readValue = om.readValue(message, PaymentCancelEvent::class.java)
 //            val result = paymentService.refundPayment(readValue)
             val result = paymentService.cancelPayment(readValue)
             log.info("Payment cencel. orderNo={}, paymentId={}", readValue.orderNo, result.paymentId)
             ack.acknowledge()
 
         } catch (e: Exception) {
-            log.error("cancel.requested 처리 실패. payload={}, err={}", messages, e.message, e)
+            log.error("cancel.requested 처리 실패. payload={}, err={}", message, e.message, e)
             throw e
+        } finally {
+            MDC.remove("traceId")
         }
     }
 
@@ -129,6 +147,7 @@ class PaymentEventListener(
         record: ConsumerRecord<String, String>,
         ack: Acknowledgment,
     ) {
+        setupTraceId(record)
         log.error("DLT로 전송된 상품 정보 요청 처리: {}", record.value())
 
         try {
@@ -187,6 +206,7 @@ class PaymentEventListener(
             log.error("DLT 처리 중 오류 발생: {}", record.value(), e)
         } finally {
             ack.acknowledge()
+            MDC.remove("traceId")
         }
     }
 }
