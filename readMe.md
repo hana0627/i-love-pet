@@ -181,7 +181,7 @@ npm start
 - **payment-mysql**: Port 3309
 
 ### 🗂 ERD (Entity Relationship Diagram)
-![project_erd.png](document/project_erd.png)![img.png](img.png)
+![project_erd.png](document/project_erd.png)
 
 
 ## 🔄 Kafka 토픽 구조
