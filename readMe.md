@@ -52,12 +52,10 @@ graph TB
     OrderService --> OrderDB
     PaymentService --> PaymentDB
     
-    UserService --> Kafka
     ProductService --> Kafka
     OrderService --> Kafka
     PaymentService --> Kafka
     
-    UserService --> Redis
     ProductService --> Redis
     OrderService --> Redis
     PaymentService --> Redis
@@ -182,7 +180,101 @@ npm start
 - **order-mysql**: Port 3308
 - **payment-mysql**: Port 3309
 
-자세한 ERD는 각 서비스의 README를 참조하세요.
+### 🗂 ERD (Entity Relationship Diagram)
+
+마이크로서비스 아키텍처에서 각 서비스는 독립된 데이터베이스를 가지며, 서비스 간 논리적 관계는 점선으로 표현됩니다.
+
+```mermaid
+erDiagram
+    %% User Service Database
+    User {
+        BIGINT id PK "AUTO_INCREMENT"
+        VARCHAR name "30, NOT NULL"
+        VARCHAR email "50, NOT NULL"
+        VARCHAR phone_number "20, NULLABLE"
+        DATETIME created_at "NOT NULL"
+    }
+
+    %% Product Service Database
+    Product {
+        BIGINT id PK "AUTO_INCREMENT"
+        VARCHAR name "255, NOT NULL"
+        BIGINT price "NOT NULL"
+        INT stock "NOT NULL"
+        DATETIME created_at "NOT NULL"
+        DATETIME updated_at "NULLABLE"
+    }
+
+    %% Order Service Database
+    Order {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT user_id "NOT NULL"
+        VARCHAR user_name "NOT NULL"
+        VARCHAR order_no "32, UNIQUE"
+        ENUM status "OrderStatus"
+        VARCHAR payment_method "NOT NULL"
+        BIGINT price "DEFAULT 0"
+        BIGINT payment_id "NULLABLE"
+        DATETIME created_at "NOT NULL"
+        DATETIME updated_at "NULLABLE"
+        VARCHAR description "NULLABLE"
+    }
+
+    OrderItem {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT product_id "NOT NULL"
+        VARCHAR product_name "NOT NULL"
+        INT quantity "NOT NULL"
+        BIGINT price "NOT NULL"
+        BIGINT order_id "NULLABLE"
+    }
+
+    %% Payment Service Database
+    Payment {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT user_id "NOT NULL"
+        BIGINT order_id "NOT NULL"
+        VARCHAR payment_key "UNIQUE, NOT NULL"
+        BIGINT amount "NOT NULL"
+        ENUM status "PaymentStatus"
+        VARCHAR method "30, NULLABLE"
+        DATETIME requested_at "NOT NULL"
+        DATETIME approved_at "NULLABLE"
+        DATETIME failed_at "NULLABLE"
+        DATETIME canceled_at "NULLABLE"
+        DATETIME refunded_at "NULLABLE"
+        VARCHAR fail_reason "200, NULLABLE"
+        DATETIME updated_at "NULLABLE"
+        VARCHAR description "NULLABLE"
+    }
+
+    PaymentLog {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT payment_id "NOT NULL"
+        ENUM log_type "LogType"
+        VARCHAR message "NULLABLE"
+        DATETIME created_at "NOT NULL"
+    }
+
+    %% 물리적 관계 (같은 DB 내)
+    Order ||--o{ OrderItem : "order_id"
+    Payment ||--o{ PaymentLog : "payment_id"
+
+    %% 논리적 관계 (서비스 간, 점선으로 표현)
+    User ||..o{ Order : "user_id (logical)"
+    Product ||..o{ OrderItem : "product_id (logical)"
+    Order ||..o| Payment : "order_id, payment_id (logical)"
+```
+
+#### 📝 ERD 범례
+- **실선 (—)**: 물리적 외래키 관계 (동일 데이터베이스 내)
+- **점선 (...)**: 논리적 관계 (서로 다른 마이크로서비스 간)
+
+#### 🔗 서비스 간 논리적 관계
+1. **User ↔ Order**: `User.id` ↔ `Order.user_id`
+2. **Order ↔ Payment**: `Order.id` ↔ `Payment.order_id`, `Order.payment_id` ↔ `Payment.id`
+3. **Product ↔ OrderItem**: `Product.id` ↔ `OrderItem.product_id`
+4. **Order ↔ OrderItem**: `Order.id` ↔ `OrderItem.order_id` (현재 미구현)
 
 ## 🔄 Kafka 토픽 구조
 
