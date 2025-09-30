@@ -470,4 +470,8 @@ cd front && npm test
 
 - **Kafka UI**: http://localhost:8090 (토픽, 메시지 모니터링)
 - **Docker Stats**: `docker-compose logs -f [service-name]`
-- **Service Health**: 각 서비스 `/health` 엔드포인트
+
+
+## 🎬 프로젝트 시연영상
+
+- **youtube**: https://www.youtube.com/watch?v=N6IL4091ePg
