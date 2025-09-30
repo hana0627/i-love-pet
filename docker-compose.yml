@@ -169,6 +169,36 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092 # Kafka 브로커 연결 주소 (내부 네트워크)
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181    # Zookeeper 연결 주소
 
+  # Prometheus (메트릭 수집 및 저장)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  # Grafana (메트릭 시각화 대시보드)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3333:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+
   user-service:
     build:
       context: ./user-service
@@ -288,3 +318,5 @@ volumes:
   zk_txn:
   kafka_data_1:
   redis_data:
+  prometheus_data:
+  grafana_data:
