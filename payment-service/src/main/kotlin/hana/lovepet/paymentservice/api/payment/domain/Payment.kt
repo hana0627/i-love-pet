@@ -7,7 +7,6 @@ import hana.lovepet.paymentservice.common.exception.constant.ErrorCode
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
-// ERD update
 @Entity
 @Table(name = "payments")
 class Payment(

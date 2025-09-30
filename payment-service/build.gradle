@@ -46,7 +46,10 @@ dependencies {
 
 	testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
 
-
+	// actuator & prometheus - start
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+	// actuator & prometheus - end
 }
 
 kotlin {
