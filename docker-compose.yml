@@ -1,146 +1,146 @@
 version: '3.8'
 
 services:
-#  user-mysql:
-#    image: mysql:8.0
-#    container_name: user-mysql
-#    restart: always
-#    environment:
-#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-#      MYSQL_DATABASE: ${MYSQL_DATABASE}
-#    ports:
-#      - "3306:3306"
-#    volumes:
-#      - ./mysql/user-mysql/init:/docker-entrypoint-initdb.d
-#    healthcheck:
-#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#
-#  product-mysql:
-#    image: mysql:8.0
-#    container_name: product-mysql
-#    restart: always
-#    environment:
-#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-#      MYSQL_DATABASE: ${MYSQL_DATABASE}
-#    ports:
-#      - "3307:3306"
-#    volumes:
-#      - ./mysql/product-mysql/init:/docker-entrypoint-initdb.d
-#    healthcheck:
-#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#
-#  order-mysql:
-#    image: mysql:8.0
-#    container_name: order-mysql
-#    restart: always
-#    environment:
-#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-#      MYSQL_DATABASE: ${MYSQL_DATABASE}
-#    ports:
-#      - "3308:3306"
-#    volumes:
-#      - ./mysql/order-mysql/init:/docker-entrypoint-initdb.d
-#    healthcheck:
-#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#
-#  payment-mysql:
-#    image: mysql:8.0
-#    container_name: payment-mysql
-#    restart: always
-#    environment:
-#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-#      MYSQL_DATABASE: ${MYSQL_DATABASE}
-#    ports:
-#      - "3309:3306"
-#    volumes:
-#      - ./mysql/payment-mysql/init:/docker-entrypoint-initdb.d
-#    healthcheck:
-#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-
-  # 테스트용 MySQL (부하테스트 시 사용)
-  user-mysql-test:
+  user-mysql:
     image: mysql:8.0
-    container_name: user-mysql-test
+    container_name: user-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
-      - "3316:3306"
+      - "3306:3306"
     volumes:
       - ./mysql/user-mysql/init:/docker-entrypoint-initdb.d
-      - user_mysql_test_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  product-mysql-test:
+  product-mysql:
     image: mysql:8.0
-    container_name: product-mysql-test
+    container_name: product-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
-      - "3317:3306"
+      - "3307:3306"
     volumes:
       - ./mysql/product-mysql/init:/docker-entrypoint-initdb.d
-      - product_mysql_test_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  order-mysql-test:
+  order-mysql:
     image: mysql:8.0
-    container_name: order-mysql-test
+    container_name: order-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
-      - "3318:3306"
+      - "3308:3306"
     volumes:
       - ./mysql/order-mysql/init:/docker-entrypoint-initdb.d
-      - order_mysql_test_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  payment-mysql-test:
+  payment-mysql:
     image: mysql:8.0
-    container_name: payment-mysql-test
+    container_name: payment-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     ports:
-      - "3319:3306"
+      - "3309:3306"
     volumes:
       - ./mysql/payment-mysql/init:/docker-entrypoint-initdb.d
-      - payment_mysql_test_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # 테스트용 MySQL (부하테스트 시 사용)
+#  user-mysql-test:
+#    image: mysql:8.0
+#    container_name: user-mysql-test
+#    restart: always
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#    ports:
+#      - "3316:3306"
+#    volumes:
+#      - ./mysql/user-mysql/init:/docker-entrypoint-initdb.d
+#      - user_mysql_test_data:/var/lib/mysql
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
+#
+#  product-mysql-test:
+#    image: mysql:8.0
+#    container_name: product-mysql-test
+#    restart: always
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#    ports:
+#      - "3317:3306"
+#    volumes:
+#      - ./mysql/product-mysql/init:/docker-entrypoint-initdb.d
+#      - product_mysql_test_data:/var/lib/mysql
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
+#
+#  order-mysql-test:
+#    image: mysql:8.0
+#    container_name: order-mysql-test
+#    restart: always
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#    ports:
+#      - "3318:3306"
+#    volumes:
+#      - ./mysql/order-mysql/init:/docker-entrypoint-initdb.d
+#      - order_mysql_test_data:/var/lib/mysql
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
+#
+#  payment-mysql-test:
+#    image: mysql:8.0
+#    container_name: payment-mysql-test
+#    restart: always
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#    ports:
+#      - "3319:3306"
+#    volumes:
+#      - ./mysql/payment-mysql/init:/docker-entrypoint-initdb.d
+#      - payment_mysql_test_data:/var/lib/mysql
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
 
   redis:
     image: redis:7-alpine              # 더 가벼운 alpine 버전 사용
@@ -259,29 +259,29 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
 
   # Grafana (메트릭 시각화 대시보드)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: always
-    ports:
-      - "3333:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    depends_on:
-      - prometheus
+#  grafana:
+#    image: grafana/grafana:latest
+#    container_name: grafana
+#    restart: always
+#    ports:
+#      - "3333:3000"
+#    volumes:
+#      - grafana_data:/var/lib/grafana
+#    environment:
+#      - GF_SECURITY_ADMIN_PASSWORD=admin
+#    depends_on:
+#      - prometheus
 
   # K6 테스트 시각화를 위한 influxDB
-  influxdb:
-    image: influxdb:1.8
-    container_name: influxdb
-    ports:
-      - "8086:8086"
-    environment:
-      - INFLUXDB_DB=k6
-    volumes:
-      - influxdb_data:/var/lib/influxdb
+#  influxdb:
+#    image: influxdb:1.8
+#    container_name: influxdb
+#    ports:
+#      - "8086:8086"
+#    environment:
+#      - INFLUXDB_DB=k6
+#    volumes:
+#      - influxdb_data:/var/lib/influxdb
 
 
   user-service:
@@ -290,10 +290,10 @@ services:
       dockerfile: Dockerfile
     container_name: user-service
     depends_on:
-#      user-mysql:
-#        condition: service_healthy
-      user-mysql-test:
+      user-mysql:
         condition: service_healthy
+#      user-mysql-test:
+#        condition: service_healthy
       kafka:
         condition: service_healthy
       redis:
@@ -322,10 +322,10 @@ services:
       dockerfile: Dockerfile
     container_name: product-service
     depends_on:
-#      product-mysql:
-#        condition: service_healthy
-      product-mysql-test:
+      product-mysql:
         condition: service_healthy
+#      product-mysql-test:
+#        condition: service_healthy
       kafka:
         condition: service_healthy
       redis:
@@ -354,10 +354,10 @@ services:
       dockerfile: Dockerfile
     container_name: order-service
     depends_on:
-#      order-mysql:
-#        condition: service_healthy
-      order-mysql-test:
+      order-mysql:
         condition: service_healthy
+#      order-mysql-test:
+#        condition: service_healthy
       kafka:
         condition: service_healthy
       redis:
@@ -386,10 +386,10 @@ services:
       dockerfile: Dockerfile
     container_name: payment-service
     depends_on:
-#      payment-mysql:
-#        condition: service_healthy
-      payment-mysql-test:
+      payment-mysql:
         condition: service_healthy
+#      payment-mysql-test:
+#        condition: service_healthy
       kafka:
         condition: service_healthy
       redis:
