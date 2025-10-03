@@ -34,3 +34,23 @@ management:
       export:
         enabled: true
 
+---
+# load-test 프로파일: 부하테스트용 설정
+spring:
+  config:
+    activate:
+      on-profile: load-test
+  datasource:
+    url: ${USER_MYSQL_URL_TEST}
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+
+logging:
+  level:
+    hana.lovepet.userservice: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSZ} [LOAD-TEST] [%thread] %-5level %logger{36} - [%X{traceId}] %msg%n"

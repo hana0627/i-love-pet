@@ -64,11 +64,12 @@ class OrderServiceImpl(
     @Transactional
     override fun prepareOrder(createOrderRequest: CreateOrderRequest): PrepareOrderResponse {
         // 1. 유저 검증
-        val user = validateUser(createOrderRequest)
+//        val user = validateUser(createOrderRequest)
 
         // 2. 주문 엔티티 생성(상태: PENDING_PAYMENT) + 저장
         // ** OrderStatus - CREATED **
-        val order = createAndSaveOrder(createOrderRequest, user.userName) // createdAt, orderNo 생성 등
+//        val order = createAndSaveOrder(createOrderRequest, user.userName) // createdAt, orderNo 생성 등
+        val order = createAndSaveOrder(createOrderRequest, createOrderRequest.userId.toString()) // createdAt, orderNo 생성 등
 
         // 3. 상품 정보 조회 & OrderItem 스냅샷 생성
         val getProductEventId = UUID.randomUUID().toString()
