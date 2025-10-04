@@ -14,7 +14,7 @@ function ProductList() {
     const ac = new AbortController();
 
     try {
-      const response = await fetch("http://localhost:8081/api/products", {
+      const response = await fetch("http://localhost:8000/product-service/api/products", {
         method: "GET",
         signal: ac.signal,
       })

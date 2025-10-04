@@ -15,7 +15,7 @@ function UserList() {
     const ac = new AbortController();
 
     try {
-      const response = await fetch("http://localhost:8080/api/users", {
+      const response = await fetch("http://localhost:8000/user-service/api/users", {
         method: "GET",
         signal: ac.signal,
       })

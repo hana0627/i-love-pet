@@ -15,7 +15,7 @@ function PaymentFail() {
     };
 
     async function fail() {
-      const response = await fetch("http://localhost:8082/api/orders/fail", {
+      const response = await fetch("http://localhost:8000/order-service/api/orders/fail", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

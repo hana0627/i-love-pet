@@ -39,7 +39,7 @@ function OrderCreate() {
     const ac = new AbortController();
 
     try {
-      const response = await fetch("http://localhost:8080/api/users", {
+      const response = await fetch("http://localhost:8000/user-service/api/users", {
         method: "GET",
         signal: ac.signal,
       })
@@ -55,7 +55,7 @@ function OrderCreate() {
     const ac = new AbortController();
 
     try {
-      const response = await fetch("http://localhost:8081/api/products", {
+      const response = await fetch("http://localhost:8000/product-service/api/products", {
         method: "GET",
         signal: ac.signal,
       })
@@ -174,7 +174,7 @@ function OrderCreate() {
 
 
     try {
-      const prepareResponse = await fetch("http://localhost:8082/api/orders/prepare", {
+      const prepareResponse = await fetch("http://localhost:8000/order-service/api/orders/prepare", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
@@ -215,7 +215,7 @@ function OrderCreate() {
     }
 
 
-    // const res = await fetch("http://localhost:8082/api/orders/prepare", {
+    // const res = await fetch("http://localhost:8000/order-service/api/orders/prepare", {
     //   method: "POST",
     //   headers: {"Content-Type": "application/json"},
     //   body: JSON.stringify({
@@ -253,7 +253,7 @@ function OrderCreate() {
     showLoadingMessage('상품 정보를 확인하고 있습니다...');
     while (attempts < maxAttempts) {
       try {
-        const statusRes = await fetch(`http://localhost:8082/api/orders/${orderNo}/status`);
+        const statusRes = await fetch(`http://localhost:8000/order-service/api/orders/${orderNo}/status`);
         if (!statusRes.ok) {
           throw new Error('주문 상태 조회 실패');
         }

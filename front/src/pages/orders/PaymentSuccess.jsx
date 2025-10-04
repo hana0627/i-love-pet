@@ -16,7 +16,7 @@ function PaymentSuccess() {
 
   //   async function confirm() {
   //     try {
-  //       const response = await fetch("http://localhost:8082/api/orders/confirm", {
+  //       const response = await fetch("http://localhost:8000/order-service/api/orders/confirm", {
   //         method: "PATCH",
   //         headers: {
   //           "Content-Type": "application/json",
@@ -51,7 +51,7 @@ function PaymentSuccess() {
     async function confirmPayment() {
       try {
         // 1단계: 결제 확정 요청 (비동기 시작)
-        const response = await fetch("http://localhost:8082/api/orders/confirm", {
+        const response = await fetch("http://localhost:8000/order-service/api/orders/confirm", {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -101,7 +101,7 @@ function PaymentSuccess() {
 
     while (attempts < maxAttempts) {
       try {
-        const statusRes = await fetch(`http://localhost:8082/api/orders/${orderNo}/status`);
+        const statusRes = await fetch(`http://localhost:8000/order-service/api/orders/${orderNo}/status`);
         if (!statusRes.ok) {
           throw new Error('주문 상태 조회 실패');
         }

@@ -22,7 +22,7 @@ function ProductCreate() {
     const ac = new AbortController();
 
     try {
-      const response = await fetch("http://localhost:8080/api/users", {
+      const response = await fetch("http://localhost:8000/user-service/api/users", {
         method: "GET",
         signal: ac.signal,
       })
@@ -42,7 +42,7 @@ function ProductCreate() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8081/api/products", {
+      const res = await fetch("http://localhost:8000/product-service/api/products", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

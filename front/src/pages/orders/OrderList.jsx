@@ -87,7 +87,7 @@ function OrderList() {
   async function getUsers() {
     const ac = new AbortController();
     try {
-      const response = await fetch("http://localhost:8080/api/users", {
+      const response = await fetch("http://localhost:8000/user-service/api/users", {
         method: "GET",
         signal: ac.signal,
       })
@@ -106,7 +106,7 @@ function OrderList() {
     params.append("page", String(page))
     params.append("size", String(size))
 
-    const url = `http://localhost:8082/api/orders?${params.toString()}`;
+    const url = `http://localhost:8000/order-service/api/orders?${params.toString()}`;
 
     try {
       const response = await fetch(url, {
@@ -121,7 +121,7 @@ function OrderList() {
 
   async function getOrderItems(orderNo) {
     const ac = new AbortController();
-    const url = `http://localhost:8082/api/orders/${orderNo}/items`;
+    const url = `http://localhost:8000/order-service/api/orders/${orderNo}/items`;
     try {
       const res = await fetch(url, {method: "GET", signal: ac.signal});
       if (!res.ok) throw new Error(`failed: ${res.status}`);
@@ -135,7 +135,7 @@ function OrderList() {
   async function getPayment(paymentId) {
     if (!paymentId && paymentId !== 0) return null;
     const ac = new AbortController();
-    const url = `http://localhost:8083/api/payments/${paymentId}`;
+    const url = `http://localhost:8000/payment-service/api/payments/${paymentId}`;
     try {
       const res = await fetch(url, {method: "GET", signal: ac.signal});
       if (!res.ok) throw new Error(`failed: ${res.status}`);
@@ -148,7 +148,7 @@ function OrderList() {
   async function getPaymentLogs(paymentId) {
     if (!paymentId && paymentId !== 0) return null;
     const ac = new AbortController();
-    const url = `http://localhost:8083/api/payments/${paymentId}/logs`;
+    const url = `http://localhost:8000/payment-service/api/payments/${paymentId}/logs`;
     try {
       const res = await fetch(url, {method: "GET", signal: ac.signal});
       if (!res.ok) throw new Error(`failed: ${res.status}`);
