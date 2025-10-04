@@ -338,7 +338,7 @@ services:
         condition: service_healthy
 
     ports:
-      - "8080:8080"
+      - "0:8080"
     environment:
       MYSQL_URL: ${USER_MYSQL_URL}
       USER_MYSQL_URL_TEST: ${USER_MYSQL_URL_TEST}
@@ -374,7 +374,7 @@ services:
       api-gateway:
         condition: service_healthy
     ports:
-      - "8081:8080"
+      - "0:8080"
     environment:
       MYSQL_URL: ${PRODUCT_MYSQL_URL}
       PRODUCT_MYSQL_URL_TEST: ${PRODUCT_MYSQL_URL_TEST}
@@ -410,7 +410,7 @@ services:
       api-gateway:
         condition: service_healthy
     ports:
-      - "8082:8080"
+      - "0:8080"
     environment:
       MYSQL_URL: ${ORDER_MYSQL_URL}
       ORDER_MYSQL_URL_TEST: ${ORDER_MYSQL_URL_TEST}
@@ -446,7 +446,7 @@ services:
       api-gateway:
         condition: service_healthy
     ports:
-      - "8083:8080"
+      - "0:8080"
     environment:
       MYSQL_URL: ${PAYMENT_MYSQL_URL}
       PAYMENT_MYSQL_URL_TEST: ${PAYMENT_MYSQL_URL_TEST}

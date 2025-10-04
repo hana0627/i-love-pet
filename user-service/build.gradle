@@ -19,6 +19,12 @@ repositories {
 	mavenCentral()
 }
 
+//spring-cloud - start
+ext {
+	set('springCloudVersion', "2025.0.0")
+}
+//spring-cloud - end
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -35,6 +41,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-registry-prometheus'
 	// actuator & prometheus - end
+
+	// eureka client
+	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+
 }
 
 kotlin {
@@ -52,3 +62,10 @@ allOpen {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+}
+//spring-cloud - end

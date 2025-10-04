@@ -1,7 +1,18 @@
 server:
-  port: 8080
+  port: 0
+
+eureka:
+  client:
+    register-with-eureka: true # Eureka서버에 클라이언트로 등록하겠다는 설정
+    fetch-registry: true # Eureka 서버로부터 인스턴트들의 주기적으로 가져오겠다는 설정
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka
+  instance:
+    instance-id: ${spring.cloud.client.hostname}:${spring.application.instance_id:${random.value}}
 
 spring:
+  application:
+    name: payment-service
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:default}
   datasource:
@@ -64,8 +75,20 @@ management:
         enabled: true
 
 ---
+server:
+  port: 0
+
+client:
+  service-url:
+    defaultZone: http://discovery-service:8761/eureka
+instance:
+  prefer-ip-address: true
+
+
 # load-test 프로파일: 부하테스트용 설정
 spring:
+  application:
+    name: payment-service
   config:
     activate:
       on-profile: load-test
