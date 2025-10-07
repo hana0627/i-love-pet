@@ -311,7 +311,7 @@ sequenceDiagram autonumber
     Note over Frontend,TossPayments: 결제 확정 흐름
     Note over Frontend,Order: ※ 모든 요청은 API Gateway(8000)를 통해 라우팅됨
 
-    Frontend->>Order: POST /api/orders/confirm
+    Frontend->>Order: POST /api/orders/confirm (결제 확정요청)
     Order->>DB: 주문상태 변경 요청
     DB->>Order: 주문상태 변경(DECREASE_STOCK)
     Order->>Redis: PaymentKey 저장
@@ -390,7 +390,7 @@ sequenceDiagram autonumber
     TossPayments->>Frontend: 결제 준비 완료
 
 
-    Frontend->>Order: POST /api/orders/confirm
+    Frontend->>Order: POST /api/orders/confirm (결제 확정요청)
     Order->>DB: 주문상태 변경 요청
     DB->>Order: 주문상태 변경(DECREASE_STOCK)
     Order->>Redis: PaymentKey 저장
@@ -454,7 +454,7 @@ sequenceDiagram autonumber
     TossPayments->>Frontend: 결제 준비 완료
 
 
-    Frontend ->> Order: POST /api/orders/confirm
+    Frontend ->> Order: POST /api/orders/confirm (결제 확정요청)
     Order ->> DB: 주문상태 변경
     DB ->> Order: 주문상태 변경 요청(DECREASE_STOCK)
     Order ->> Redis: PaymentKey 저장
