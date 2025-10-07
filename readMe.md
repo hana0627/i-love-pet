@@ -327,9 +327,9 @@ sequenceDiagram autonumber
 
     Kafka->>Product: product.stock.decrease 이벤트 수신
     
+    Product->>Redis: 재고차감시도 기록 조회
+    Redis->>Product: 재고차감시도 기록 응답
     rect rgba(205, 237, 151, 0.3)
-        Product->>Redis: 재고차감시도 기록 조회
-        Redis->>Product: 재고차감시도 기록 응답
         alt 기록 존재함 (이미 처리된 요청)
             Product->>Product: 재고차감 스킵(return)
         else 기록없음
@@ -402,18 +402,19 @@ sequenceDiagram autonumber
         Order->>Frontend: 주문상태 응답(DECREASE_STOCK)
     end
 
-    rect rgba(255, 182, 193, 0.3)
-        Kafka->>Product: product.stock.decrease 이벤트 수신
+    Kafka->>Product: product.stock.decrease 이벤트 수신
+    
+    Product->>Redis: 재고차감시도 기록 조회
+    Product->>Redis: 재고차감시도 기록 응답
+    
+    alt 기록 존재함 (이미 처리된 요청)
+        Product->>Product: 재고차감 스킵(return)
+    else 기록없음 
+        Product->>Redis: 재고차감시도 기록(멱등처리)
+        Product->>DB: 재고 확인 요청
+        DB->>Product: 재고 확인
         
-        Product->>Redis: 재고차감시도 기록 조회
-        Product->>Redis: 재고차감시도 기록 응답
-        
-        alt 기록 존재함 (이미 처리된 요청)
-            Product->>Product: 재고차감 스킵(return)
-        else 기록없음 
-            Product->>Redis: 재고차감시도 기록(멱등처리)
-            Product->>DB: 재고 확인 요청
-            DB->>Product: 재고 확인
+        rect rgba(255, 182, 193, 0.3)
             Product->>Product: 재고 부족 판정
             Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
             Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
