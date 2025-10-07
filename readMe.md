@@ -327,16 +327,18 @@ sequenceDiagram autonumber
 
     Kafka->>Product: product.stock.decrease 이벤트 수신
     
-    Product->>Redis: 재고차감시도 기록 조회
-    Redis->>Product: 재고차감시도 기록 응답
-    alt 기록 존재함 (이미 처리된 요청)
-        Product->>Product: 재고차감 스킵(return)
-    else 기록없음
-      Product->>Redis: 재고차감시도 기록(멱등처리)
-      Product->>DB: 재고차감 요청
-      DB->>Product: 재고차감
-      Product->>Redis: 재고차감시도 기록 삭제
-      Product->>Kafka: product.stock.decreased 이벤트 발행
+    rect rgba(205, 237, 151, 0.3)
+        Product->>Redis: 재고차감시도 기록 조회
+        Redis->>Product: 재고차감시도 기록 응답
+        alt 기록 존재함 (이미 처리된 요청)
+            Product->>Product: 재고차감 스킵(return)
+        else 기록없음
+          Product->>Redis: 재고차감시도 기록(멱등처리)
+          Product->>DB: 재고차감 요청
+          DB->>Product: 재고차감
+          Product->>Redis: 재고차감시도 기록 삭제
+          Product->>Kafka: product.stock.decreased 이벤트 발행
+        end
     end
 
     Kafka->>Order: product.stock.decreased 이벤트 수신
@@ -400,21 +402,21 @@ sequenceDiagram autonumber
         Order->>Frontend: 주문상태 응답(DECREASE_STOCK)
     end
 
-    Kafka->>Product: product.stock.decrease 이벤트 수신
-    
-    Product->>Redis: 재고차감시도 기록 조회
-    Product->>Redis: 재고차감시도 기록 응답
-    
-    alt 기록 존재함 (이미 처리된 요청)
-        Product->>Product: 재고차감 스킵(return)
-    else 기록없음 
-        Product->>Redis: 재고차감시도 기록(멱등처리)
-        rect rgba(255, 182, 193, 0.3)
-              Product->>DB: 재고 확인 요청
-              DB->>Product: 재고 확인
-              Product->>Product: 재고 부족 판정
-              Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
-              Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
+    rect rgba(255, 182, 193, 0.3)
+        Kafka->>Product: product.stock.decrease 이벤트 수신
+        
+        Product->>Redis: 재고차감시도 기록 조회
+        Product->>Redis: 재고차감시도 기록 응답
+        
+        alt 기록 존재함 (이미 처리된 요청)
+            Product->>Product: 재고차감 스킵(return)
+        else 기록없음 
+            Product->>Redis: 재고차감시도 기록(멱등처리)
+            Product->>DB: 재고 확인 요청
+            DB->>Product: 재고 확인
+            Product->>Product: 재고 부족 판정
+            Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
+            Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
         end
     end
 
@@ -465,18 +467,9 @@ sequenceDiagram autonumber
 
 
     Kafka ->> Product: product.stock.decrease 이벤트 수신
-    
-    Product->>Redis: 재고차감시도 기록 조회
-    Redis->>Product: 재고차감시도 기록 응답
-    alt 기록 존재함 (이미 처리된 요청)
-        Product->>Product: 재고차감 스킵(return)
-    else 기록없음
-        Product->>Redis: 재고차감시도 기록(멱등처리)
-        Product->>DB: 재고차감 요청
-        DB->>Product: 재고차감
-        Product->>Redis: 재고차감시도 기록삭제
-        Product->>Kafka: product.stock.decreased 이벤트 발행(success = fail)
-    end
+    Product->>DB: 재고차감 요청
+    DB->>Product: 재고차감
+    Product->>Kafka: product.stock.decreased 이벤트 발행(success = true)
     
     
     Kafka ->> Order: product.stock.decreased 이벤트 수신
@@ -517,15 +510,17 @@ sequenceDiagram autonumber
     Product->>Redis: 재고복구시도 기록 조회
     Redis->>Product: 재고복구시도 기록 응답
     
-    alt 기록 존재함 (이미 처리된 요청)
-        Product->>Product: 재고복구 스킵(return)
-    else 기록없음
-        Product->>Redis: 재고복구시도 기록(중복 재고 복구를 위한 멱등처리)
-        Product->>DB: 재고 복구 요청
-        DB->>Product: 재고 복구
-        Product->>Redis: 재고복구시도 기록 삭제
-        alt 재고 복구 실패
-            Product->>DLQ: 실패이벤트 저장(로깅)
+    rect rgba(205, 237, 151, 0.3)
+        alt 기록 존재함 (이미 처리된 요청)
+            Product->>Product: 재고복구 스킵(return)
+        else 기록없음
+            Product->>Redis: 재고복구시도 기록(중복 재고 복구를 위한 멱등처리)
+            Product->>DB: 재고 복구 요청
+            DB->>Product: 재고 복구
+            Product->>Redis: 재고복구시도 기록 삭제
+            alt 재고 복구 실패
+                Product->>DLQ: 실패이벤트 저장(로깅)
+            end
         end
     end
 ```
