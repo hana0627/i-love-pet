@@ -277,8 +277,8 @@ sequenceDiagram autonumber
     Order->>Kafka: payment.prepare 이벤트 발행
 
     Kafka->>Payment: payment.prepare 이벤트 수신
-    Payment->>DB: 결제정보 저장, 임시 PaymentKey발행 요청
-    DB->>Payment: 결제정보 저장, 임시 PaymentKey발행
+    Payment->>DB: 결제정보 저장 요청
+    DB->>Payment: 결제정보 저장
     Payment->>Kafka: payment.prepared 이벤트 발행
 
     Kafka->>Order: payment.prepared 이벤트 수신
@@ -326,10 +326,18 @@ sequenceDiagram autonumber
 
 
     Kafka->>Product: product.stock.decrease 이벤트 수신
-    Product->>Redis: 재고차감시도 기록(멱등처리)
-    Product->>Product: 재고차감
-    Product->>Redis: 재고차감시도 기록삭제
-    Product->>Kafka: product.stock.decreased 이벤트 발행
+    
+    Product->>Redis: 재고차감시도 기록 조회
+    Redis->>Product: 재고차감시도 기록 응답
+    alt 기록 존재함 (이미 처리된 요청)
+        Product->>Product: 재고차감 스킵(return)
+    else 기록없음
+      Product->>Redis: 재고차감시도 기록(멱등처리)
+      Product->>DB: 재고차감 요청
+      DB->>Product: 재고차감
+      Product->>Redis: 재고차감시도 기록 삭제
+      Product->>Kafka: product.stock.decreased 이벤트 발행
+    end
 
     Kafka->>Order: product.stock.decreased 이벤트 수신
     Order->>Redis: PaymentKey 조회
@@ -367,8 +375,8 @@ sequenceDiagram autonumber
     participant Order
     participant Product
     participant Payment
-    participant DB
     participant Redis
+    participant DB
     participant Kafka
     participant DLQ as Dead Letter Queue
     participant TossPayments
@@ -393,16 +401,26 @@ sequenceDiagram autonumber
     end
 
     Kafka->>Product: product.stock.decrease 이벤트 수신
-    Product->>Redis: 재고차감시도 기록(멱등처리)
     
-    alt 재고 부족
-        Product->>Product: 재고 확인 → 부족 판정
-        Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
-        Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
+    Product->>Redis: 재고차감시도 기록 조회
+    Product->>Redis: 재고차감시도 기록 응답
+    
+    alt 기록 존재함 (이미 처리된 요청)
+        Product->>Product: 재고차감 스킵(return)
+    else 기록없음 
+        Product->>Redis: 재고차감시도 기록(멱등처리)
+        rect rgba(255, 182, 193, 0.3)
+              Product->>DB: 재고 확인 요청
+              DB->>Product: 재고 확인
+              Product->>Product: 재고 부족 판정
+              Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
+              Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
+        end
     end
 
     Kafka->>Order: product.stock.decreased(success=fail) 이벤트 수신
-    Order->>Order: 주문상태 변경(DECREASE_STOCK_FAILED)
+    Order->>DB: 주문상태 변경 요청
+    DB->>Order: 주문상태 변경(DECREASE_STOCK_FAILED)
 
     Frontend->>Order: 주문상태 폴링
     Order->>Frontend: 주문상태 응답(DECREASE_STOCK_FAILED)
@@ -418,8 +436,8 @@ sequenceDiagram autonumber
     participant Order
     participant Product
     participant Payment
-    participant DB
     participant Redis
+    participant DB
 
     participant Kafka
     participant DLQ as Dead Letter Queue
@@ -447,30 +465,41 @@ sequenceDiagram autonumber
 
 
     Kafka ->> Product: product.stock.decrease 이벤트 수신
-    Product->>Redis: 재고차감시도 기록(멱등처리)
-    Product->>Product: 재고차감
-    Product->>Redis: 재고차감시도 기록삭제
-    Product->>Kafka: product.stock.decreased 이벤트 발행(success = fail)
-
+    
+    Product->>Redis: 재고차감시도 기록 조회
+    Redis->>Product: 재고차감시도 기록 응답
+    alt 기록 존재함 (이미 처리된 요청)
+        Product->>Product: 재고차감 스킵(return)
+    else 기록없음
+        Product->>Redis: 재고차감시도 기록(멱등처리)
+        Product->>DB: 재고차감 요청
+        DB->>Product: 재고차감
+        Product->>Redis: 재고차감시도 기록삭제
+        Product->>Kafka: product.stock.decreased 이벤트 발행(success = fail)
+    end
+    
+    
     Kafka ->> Order: product.stock.decreased 이벤트 수신
     Order->>Redis: PaymentKey 조회
     Redis->>Order: PaymentKey 응답
-        Order->>Order: 주문상태 변경(PAYMENT_PENDING)
-        Order->>Kafka: payment.pending 이벤트 발행
+    Order->>DB: 주문상태 변경 요청
+    DB->>Order: 주문상태 변경(PAYMENT_PENDING)
+    Order->>Kafka: payment.pending 이벤트 발행
 
 
     Kafka->>Payment: payment.pending 이벤트 수신
-    alt 잔액부족으로 결재실패
-    Payment->>TossPayments: 결제승인 API 호출
-        TossPayments->>Payment: 결제실패 응답
-    Payment->>Payment: PaymentKey맵핑, 결제정보 저장
-        Payment->>DB: 장애로그 저장 요청
-        DB->>Payment: 장애로그 저장
-        Payment->>DLQ:payment.pending-dlt 이벤트 발행
-        DLQ->>Payment:payment.pending-dlt 이벤트 처리
-        Payment->>DB: 결제상태 상태 변경 및 실패로그 저장 요청
-        DB->>Payment: 결제상태 상태 변경 및 실패로그 저장
-        Payment->>Kafka: payment.confirmed.fail 이벤트 발행
+    rect rgba(255, 182, 193, 0.3)
+      alt 잔액부족으로 결재실패
+          Payment->>TossPayments: 결제승인 API 호출
+          TossPayments->>Payment: 결제실패 응답
+          Payment->>DB: 장애로그 저장 요청
+          DB->>Payment: 장애로그 저장
+          Payment->>DLQ:payment.pending-dlt 이벤트 발행
+          DLQ->>Payment:payment.pending-dlt 이벤트 처리
+          Payment->>DB: 결제상태 상태 변경 및 실패로그 저장 요청
+          DB->>Payment: 결제상태 상태 변경 및 실패로그 저장
+          Payment->>Kafka: payment.confirmed.fail 이벤트 발행
+      end
     end
 
     Kafka->>Order: payment.confirmed.fail 이벤트 수신
@@ -485,13 +514,20 @@ sequenceDiagram autonumber
     Note over Frontend,TossPayments: 보상트랜잭션 - 재고롤백 이벤트
     Order->>Kafka: product.stock.rollback 이벤트 발행
     Kafka->>Product: product.stock.rollback 이벤트 수신
-    Product->>Redis: 재고복구시도 기록(중복 재고 복구를 위한 멱등처리)
-    Product->>Product: 재고 복구
-    Product->>Redis: 재고복구시도 기록
-    alt 재고 복구 실패
-        Product->>DLQ: 실패이벤트 저장(로깅)
+    Product->>Redis: 재고복구시도 기록 조회
+    Redis->>Product: 재고복구시도 기록 응답
+    
+    alt 기록 존재함 (이미 처리된 요청)
+        Product->>Product: 재고복구 스킵(return)
+    else 기록없음
+        Product->>Redis: 재고복구시도 기록(중복 재고 복구를 위한 멱등처리)
+        Product->>DB: 재고 복구 요청
+        DB->>Product: 재고 복구
+        Product->>Redis: 재고복구시도 기록 삭제
+        alt 재고 복구 실패
+            Product->>DLQ: 실패이벤트 저장(로깅)
+        end
     end
-
 ```
 
 
