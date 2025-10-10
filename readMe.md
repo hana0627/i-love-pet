@@ -168,21 +168,6 @@ npm start
 - **Kafka UI**: http://localhost:8090
 - **Frontend**: http://localhost:3000 (별도 실행 필요)
 
-## 🔧 개발 환경 설정
-
-### 프론트엔드 개발
-```bash
-cd front
-npm install
-npm start
-```
-
-### 개별 서비스 개발
-```bash
-# 각 서비스 디렉토리에서
-./gradlew bootRun
-```
-
 ## 📊 데이터베이스 스키마
 
 각 서비스는 독립적인 MySQL 데이터베이스를 사용합니다:
