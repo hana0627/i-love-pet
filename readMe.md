@@ -126,7 +126,7 @@ MYSQL_DATABASE=lovepet
 SPRING_SERVICE_PROFILE=default
 ```
 
-front 패키지 하위에 `.env` 파일을 생성하고 다음 내용을 설정
+front 패키지 하위에 `.env` 파일을 생성하고 다음 내용을 설정:
 
 ```env
 REACT_APP_TOSS_CLIENT_KEY = test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm
@@ -134,6 +134,14 @@ REACT_APP_TOSS_CLIENT_KEY = test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm
 
 ### 2. 전체 시스템 실행
 ```bash
+# 각 서비스별 프로젝트 빌드
+cd api-gateway && ./gradlew clean build -x test && cd ..
+cd discovery-service && ./gradlew clean build -x test && cd ..
+cd order-service && ./gradlew clean build -x test && cd ..
+cd payment-service && ./gradlew clean build -x test && cd ..
+cd product-service && ./gradlew clean build -x test && cd ..
+cd user-service && ./gradlew clean build -x test && cd ..
+
 # 모든 서비스 빌드 및 실행
 docker-compose up -d --build
 
@@ -142,6 +150,11 @@ docker-compose logs -f [service-name]
 
 # 상태 확인
 docker-compose ps
+
+# 프론트엔드 실행
+cd front
+npm install
+npm start
 ```
 
 ### 3. 서비스 접속 확인
