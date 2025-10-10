@@ -19,62 +19,8 @@ I Love Pet은 펫샵 전자상거래 플랫폼을 위한 MSA(Microservice Archit
 
 프로젝트는 4개의 마이크로서비스, API Gateway, Discovery Service, 그리고 React 기반 프론트엔드로 구성됩니다.
 
-```mermaid
-graph TB
-    Frontend[🌐 Frontend<br/>React<br/>:3000]
+<img width="1600" height="1332" alt="제목을-입력해주세요_-003_(2)" src="https://github.com/user-attachments/assets/17023655-587b-49e1-b96d-15a6e7ba1ae8" />
 
-    subgraph "Gateway Layer"
-        APIGateway[🚪 API Gateway<br/>Spring Cloud Gateway<br/>:8000]
-        Discovery[🔍 Discovery Service<br/>Eureka Server<br/>:8761]
-    end
-
-    subgraph "Microservices"
-        UserService[👤 User Service<br/>Dynamic Port]
-        ProductService[📦 Product Service<br/>Dynamic Port]
-        OrderService[🛒 Order Service<br/>Dynamic Port]
-        PaymentService[💳 Payment Service<br/>Dynamic Port]
-    end
-
-    subgraph "Infrastructure"
-        Kafka[📨 Kafka<br/>:9092]
-        Redis[🗄️ Redis<br/>:6379]
-        KafkaUI[📊 Kafka UI<br/>:8090]
-    end
-
-    subgraph "Databases"
-        UserDB[(👤 User MySQL<br/>:3306)]
-        ProductDB[(📦 Product MySQL<br/>:3307)]
-        OrderDB[(🛒 Order MySQL<br/>:3308)]
-        PaymentDB[(💳 Payment MySQL<br/>:3309)]
-    end
-
-    Frontend --> APIGateway
-    APIGateway --> Discovery
-    APIGateway --> UserService
-    APIGateway --> ProductService
-    APIGateway --> OrderService
-    APIGateway --> PaymentService
-
-    UserService -.등록/조회.-> Discovery
-    ProductService -.등록/조회.-> Discovery
-    OrderService -.등록/조회.-> Discovery
-    PaymentService -.등록/조회.-> Discovery
-
-    UserService --> UserDB
-    ProductService --> ProductDB
-    OrderService --> OrderDB
-    PaymentService --> PaymentDB
-
-    ProductService --> Kafka
-    OrderService --> Kafka
-    PaymentService --> Kafka
-
-    ProductService --> Redis
-    OrderService --> Redis
-    PaymentService --> Redis
-
-    Kafka --> KafkaUI
-```
 
 ## 🛠 기술 스택
 
@@ -159,7 +105,31 @@ i-love-pet/
 프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 설정:
 
 ```env
-추후 공개에정
+USER_MYSQL_URL=jdbc:mysql://user-mysql:3306/lovepet
+PRODUCT_MYSQL_URL=jdbc:mysql://product-mysql:3306/lovepet
+ORDER_MYSQL_URL=jdbc:mysql://order-mysql:3306/lovepet
+PAYMENT_MYSQL_URL=jdbc:mysql://payment-mysql:3306/lovepet
+
+# 테스트용 MySQL URL (부하테스트 시 사용)
+USER_MYSQL_URL_TEST=jdbc:mysql://user-mysql-test:3306/lovepet
+PRODUCT_MYSQL_URL_TEST=jdbc:mysql://product-mysql-test:3306/lovepet
+ORDER_MYSQL_URL_TEST=jdbc:mysql://order-mysql-test:3306/lovepet
+PAYMENT_MYSQL_URL_TEST=jdbc:mysql://payment-mysql-test:3306/lovepet
+
+MYSQL_USERNAME=root
+MYSQL_PASSWORD=123456
+MYSQL_ROOT_PASSWORD=123456
+MYSQL_DATABASE=lovepet
+
+# SPRING_SERVICE_PROFILE (default or load-test)
+#SPRING_SERVICE_PROFILE=load-test
+SPRING_SERVICE_PROFILE=default
+```
+
+front 패키지 하위에 `.env` 파일을 생성하고 다음 내용을 설정
+
+```env
+REACT_APP_TOSS_CLIENT_KEY = test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm
 ```
 
 ### 2. 전체 시스템 실행
@@ -238,295 +208,24 @@ product.stock.rollback       # 재고 롤백 (보상 트랜잭션)
 
 ### 1. 정상 주문 처리 - 결제 요청
 
-```mermaid
-sequenceDiagram autonumber
-    participant Frontend
-    participant Order
-    participant Product
-    participant Payment
-    participant Redis
-    participant DB
-    participant Kafka
-    participant TossPayments
-
-    Note over Frontend,TossPayments: 결제 준비 흐름
-    Note over Frontend,Order: ※ 모든 요청은 API Gateway(8000)를 통해 라우팅됨
-
-
-    Frontend->>Order: POST /api/orders/prepare (결제 준비요청)
-    Order->>Redis: 주문번호 생성요청
-    Redis->>Order: 주문번호 생성 (yyyyMMdd00000001~)
-    Order->>DB: 주문 생성 요청
-    DB->>Order: 주문 생성(CREATED)
-    Order->>Kafka: product.information.request 이벤트 발행
-    Order->>Frontend: 주문번호 응답
-    
-    loop 최대 30초간 폴링
-        Frontend->>Order: 주문상태 폴링(1request/sec)
-        Order->>Frontend: 주문상태 응답
-    end
-
-    Kafka->>Product: product.information.request 이벤트 수신
-    Product->>DB: 상품정보 요청
-    DB->>Product: 상품정보 응답 (상품명, 가격, 재고)
-    Product->>Kafka: product.information.response 이벤트 발행
-
-    Kafka->>Order: product.information.response 이벤트 수신
-    Order->>DB: 결제금액 저장, 주문상태 변경 요청
-    DB->>Order: 결제금액 저장, 주문상태 변경(VALIDATION_SUCCESS)
-    Order->>Kafka: payment.prepare 이벤트 발행
-
-    Kafka->>Payment: payment.prepare 이벤트 수신
-    Payment->>DB: 결제정보 저장 요청
-    DB->>Payment: 결제정보 저장
-    Payment->>Kafka: payment.prepared 이벤트 발행
-
-    Kafka->>Order: payment.prepared 이벤트 수신
-    Order->>DB: PaymentId 맵핑, 주문상태 변경 요청
-    DB->>Order: PaymentId 맵핑, 주문상태 변경(PREPARED)
-
-
-
-    Frontend->>Order: 주문상태 폴링
-    Order->>Frontend: 주문상태 응답(PREPARED)
-
-
-    Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: 결제 준비 완료
-```
-
+<img width="3840" height="3474" alt="성공_결제준비" src="https://github.com/user-attachments/assets/1e9726ab-ca94-424f-9919-c869a1cacb79" />
 
 ### 2. 정상 주문 처리 - 결제확정
-```mermaid
-sequenceDiagram autonumber
-    participant Frontend
-    participant Order
-    participant Product
-    participant Payment
-    participant Redis
-    participant DB
-    participant Kafka
-    participant TossPayments
-    
-    Note over Frontend,TossPayments: 결제 확정 흐름
-    Note over Frontend,Order: ※ 모든 요청은 API Gateway(8000)를 통해 라우팅됨
 
-    Frontend->>Order: POST /api/orders/confirm (결제 확정요청)
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(DECREASE_STOCK)
-    Order->>Redis: PaymentKey 저장
-    Order->>Kafka: product.stock.decrease 이벤트 발행
-    Order->>Frontend: 주문상태 응답
+<img width="3400" height="3840" alt="성공_결제확정" src="https://github.com/user-attachments/assets/7ef29293-6052-4e69-94d4-5e8a9e32c718" />
 
-
-    loop 최대 30초간 폴링
-        Frontend->>Order: 주문상태 폴링(1request/sec)
-        Order->>Frontend: 주문상태 응답
-    end
-
-
-    Kafka->>Product: product.stock.decrease 이벤트 수신
-    
-    Product->>Redis: 재고차감시도 기록 조회
-    Redis->>Product: 재고차감시도 기록 응답
-    rect rgba(205, 237, 151, 0.3)
-        alt 기록 존재함 (이미 처리된 요청)
-            Product->>Product: 재고차감 스킵(return)
-        else 기록없음
-          Product->>Redis: 재고차감시도 기록(멱등처리)
-          Product->>DB: 재고차감 요청
-          DB->>Product: 재고차감
-          Product->>Redis: 재고차감시도 기록 삭제
-          Product->>Kafka: product.stock.decreased 이벤트 발행
-        end
-    end
-
-    Kafka->>Order: product.stock.decreased 이벤트 수신
-    Order->>Redis: PaymentKey 조회
-    Redis->>Order: PaymentKey 응답
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(PAYMENT_PENDING)
-    Order->>Kafka: payment.pending 이벤트 발행
-
-    Kafka->>Payment: payment.pending 이벤트 수신
-    Payment->>TossPayments: 결제승인 API 호출
-    TossPayments->>Payment: 결제승인 결과
-    Payment->>DB: PaymentKey맵핑, 결제정보 저장 요청
-    DB->>Payment: PaymentKey맵핑, 결제정보 저장
-    Payment->>Kafka: payment.confirmed 이벤트 발행
-
-    Kafka->>Order: payment.confirmed 이벤트 수신
-    Order->>DB: 주문상태변경 요청
-    DB->>Order: 주문상태변경(CONFIRMED)
-
-    Frontend->>Order: 주문상태 폴링
-    Order->>Frontend: 주문상태 응답(CONFIRMED)
-    
-    Note over Frontend: 주문 완료 - 사용자에게 성공 메시지 표시
-
-```
 
 ---
 
 ### 3. 주문 실패 처리
+
 #### 3-1. 재고부족
 
-```mermaid
-sequenceDiagram autonumber
-    participant Frontend
-    participant Order
-    participant Product
-    participant Payment
-    participant Redis
-    participant DB
-    participant Kafka
-    participant DLQ as Dead Letter Queue
-    participant TossPayments
-
-    Note over Frontend,TossPayments: 재고부족 실패 시나리오
-    Note over Frontend,Order: ※ 모든 요청은 API Gateway(8000)를 통해 라우팅됨
-
-    Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: 결제 준비 완료
-
-
-    Frontend->>Order: POST /api/orders/confirm (결제 확정요청)
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(DECREASE_STOCK)
-    Order->>Redis: PaymentKey 저장
-    Order->>Kafka: product.stock.decrease 이벤트 발행
-    Order->>Frontend: 주문번호 응답
-    
-    loop 폴링 지속
-        Frontend->>Order: 주문상태 폴링
-        Order->>Frontend: 주문상태 응답(DECREASE_STOCK)
-    end
-
-    Kafka->>Product: product.stock.decrease 이벤트 수신
-    
-    Product->>Redis: 재고차감시도 기록 조회
-    Product->>Redis: 재고차감시도 기록 응답
-    
-    alt 기록 존재함 (이미 처리된 요청)
-        Product->>Product: 재고차감 스킵(return)
-    else 기록없음 
-        Product->>Redis: 재고차감시도 기록(멱등처리)
-        Product->>DB: 재고 확인 요청
-        DB->>Product: 재고 확인
-        
-        rect rgba(255, 182, 193, 0.3)
-            Product->>Product: 재고 부족 판정
-            Product->>DLQ: product.stock.decrease-dlt 이벤트 발행
-            Product->>Kafka: product.stock.decreased(success=fail) 이벤트 발행
-        end
-    end
-
-    Kafka->>Order: product.stock.decreased(success=fail) 이벤트 수신
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(DECREASE_STOCK_FAILED)
-
-    Frontend->>Order: 주문상태 폴링
-    Order->>Frontend: 주문상태 응답(DECREASE_STOCK_FAILED)
-    
-    Note over Frontend: 사용자에게 "재고 부족으로 주문이 취소되었습니다" 메시지 표시
-```
+<img width="4374" height="3586" alt="Untitled diagram-2025-10-10-102742" src="https://github.com/user-attachments/assets/0d76853c-4874-4689-bf08-a7c70ea5953b" />
 
 #### 3-2. 잔액부족
 
-```mermaid
-sequenceDiagram autonumber
-    participant Frontend
-    participant Order
-    participant Product
-    participant Payment
-    participant Redis
-    participant DB
-
-    participant Kafka
-    participant DLQ as Dead Letter Queue
-    participant TossPayments
-
-    Note over Frontend,TossPayments: 장애상황2. 잔액부족
-    Note over Frontend,Order: ※ 모든 요청은 API Gateway(8000)를 통해 라우팅됨
-
-
-    Frontend->>TossPayments: 결제 요청
-    TossPayments->>Frontend: 결제 준비 완료
-
-
-    Frontend ->> Order: POST /api/orders/confirm (결제 확정요청)
-    Order ->> DB: 주문상태 변경
-    DB ->> Order: 주문상태 변경 요청(DECREASE_STOCK)
-    Order ->> Redis: PaymentKey 저장
-    Order ->> Kafka: product.stock.decrease 이벤트 발행
-    Order ->> Frontend: 주문번호 응답
-    
-    loop 폴링 지속
-        Frontend->>Order: 주문상태 폴링
-        Order->>Frontend: 주문상태 응답(DECREASE_STOCK)
-    end
-
-
-    Kafka ->> Product: product.stock.decrease 이벤트 수신
-    Product->>DB: 재고차감 요청
-    DB->>Product: 재고차감
-    Product->>Kafka: product.stock.decreased 이벤트 발행(success = true)
-    
-    
-    Kafka ->> Order: product.stock.decreased 이벤트 수신
-    Order->>Redis: PaymentKey 조회
-    Redis->>Order: PaymentKey 응답
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(PAYMENT_PENDING)
-    Order->>Kafka: payment.pending 이벤트 발행
-
-
-    Kafka->>Payment: payment.pending 이벤트 수신
-    rect rgba(255, 182, 193, 0.3)
-      alt 잔액부족으로 결재실패
-          Payment->>TossPayments: 결제승인 API 호출
-          TossPayments->>Payment: 결제실패 응답
-          Payment->>DB: 장애로그 저장 요청
-          DB->>Payment: 장애로그 저장
-          Payment->>DLQ:payment.pending-dlt 이벤트 발행
-          DLQ->>Payment:payment.pending-dlt 이벤트 처리
-          Payment->>DB: 결제상태 상태 변경 및 실패로그 저장 요청
-          DB->>Payment: 결제상태 상태 변경 및 실패로그 저장
-          Payment->>Kafka: payment.confirmed.fail 이벤트 발행
-      end
-    end
-
-    Kafka->>Order: payment.confirmed.fail 이벤트 수신
-    Order->>DB: 주문상태 변경 요청
-    DB->>Order: 주문상태 변경(PAYMENT_FAILED)
-
-
-    Frontend->>Order: 주문상태 폴링
-    Order->>Frontend: 주문상태 응답(PAYMENT_FAILED)
-    Note over Frontend: 사용자에게 "잔액이 부족합니다" 메시지 표시
-
-    Note over Frontend,TossPayments: 보상트랜잭션 - 재고롤백 이벤트
-    Order->>Kafka: product.stock.rollback 이벤트 발행
-    Kafka->>Product: product.stock.rollback 이벤트 수신
-    Product->>Redis: 재고복구시도 기록 조회
-    Redis->>Product: 재고복구시도 기록 응답
-    
-    rect rgba(205, 237, 151, 0.3)
-        alt 기록 존재함 (이미 처리된 요청)
-            Product->>Product: 재고복구 스킵(return)
-        else 기록없음
-            Product->>Redis: 재고복구시도 기록(중복 재고 복구를 위한 멱등처리)
-            Product->>DB: 재고 복구 요청
-            DB->>Product: 재고 복구
-            Product->>Redis: 재고복구시도 기록 삭제
-            alt 재고 복구 실패
-                Product->>DLQ: 실패이벤트 저장(로깅)
-            end
-        end
-    end
-```
-
-
+<img width="2866" height="3840" alt="실패_결제실패" src="https://github.com/user-attachments/assets/bd95fffc-fc65-49eb-b5d5-0c6f5a3e21e9" />
 
 
 ## 🔧 개발 및 테스트
